@@ -1,4 +1,4 @@
-const serverless = require('serverless-http');
+
 const express = require("express");
 const axios = require("axios");
 const FormData = require("form-data");
@@ -152,5 +152,3 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
-
-module.exports.handler = serverless(app);

@@ -151,3 +151,14 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
+// ... existing code ...
+
+// IMPORTANT: Export the app for Vercel
+module.exports = app;
+
+// Keep this so it still works locally with 'node index.js'
+if (require.main === module) {
+  const PORT = process.env.PORT || 1337;
+  app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+}

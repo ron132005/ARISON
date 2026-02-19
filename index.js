@@ -25,11 +25,19 @@ const fbApi = axios.create({
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
-// 1. Verification
 app.get("/webhook", (req, res) => {
-  if (req.query["hub.verify_token"] === VERIFY_TOKEN) {
-    return res.status(200).send(req.query["hub.challenge"]);
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("WEBHOOK_VERIFIED");
+
+    // Explicitly set the status and content type to text/plain
+    res.set("Content-Type", "text/plain");
+    return res.status(200).send(challenge);
   }
+
   res.sendStatus(403);
 });
 

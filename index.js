@@ -16,7 +16,7 @@ const mcuCommand = require("./funcs/mcu.js");
 const app = express().use(express.json());
 
 // --- TOKENS ---
-const PAGE_ACCESS_TOKEN = "YOUR_PAGE_ACCESS_TOKEN";
+const PAGE_ACCESS_TOKEN = "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
 const VERIFY_TOKEN = "getroned";
 
 // Pre-configure axios
@@ -189,3 +189,4 @@ async function callSendAPI(psid, response, reply_to_mid = null) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+

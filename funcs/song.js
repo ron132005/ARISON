@@ -12,65 +12,51 @@ const messages = [
   "🔊 Audio ready for deployment…",
 ];
 
-const dirPath = path.join(__dirname, "..", "temp", "song");
+// Use /tmp for Render compatibility
+const dirPath = "/tmp/songs";
 if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
-module.exports = async (sender_psid, callSendAPI, messageText) => {
-  // Extract query: assuming command is "/song [name]" or "song [name]"
-  const query = messageText.replace(/^\/?song\s+/i, "").trim();
-
-  if (!query) {
-    return callSendAPI(sender_psid, { text: "⚠️ Usage: /song [song name]" });
-  }
-
-  const filePath = path.join(dirPath, `song_${Date.now()}.m4a`);
+module.exports = async (sender_psid, callSendAPI, query) => {
+  const filename = `song_${Date.now()}.m4a`;
+  const filePath = path.join(dirPath, filename);
   const randomMessage = messages[Math.floor(Math.random() * messages.length)];
 
   try {
-    // 1. Send initial status message
+    // 1. Send status
     await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
-    // 2. Fetch metadata using yt-dlp
-    const info = await ytdlp(`ytsearch1:${query}`, {
-      dumpSingleJson: true,
-      noPlaylist: true,
-      preferFreeFormats: true,
-    });
-
-    const videoInfo = Array.isArray(info) ? info[0] : info;
-    const title = videoInfo.title || "Unknown Title";
-
-    // 3. Download the audio
-    await ytdlp(videoInfo.webpage_url, {
+    // 2. Search and Download
+    // Using ytsearch1: ensures it picks the first result
+    await ytdlp(`ytsearch1:${query}`, {
       extractAudio: true,
       audioFormat: "m4a",
-      format: "bestaudio[ext=m4a]/tiny",
       output: filePath,
       ffmpegLocation: ffmpegPath,
+      noCheckCertificates: true,
       noPlaylist: true,
     });
 
-    // 4. Send the file
-    // NOTE: Official FB API requires a specific structure for attachments.
-    // Most 'callSendAPI' helpers for official bots use a URL or a stream.
+    // 3. Check if file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error("File not found after download.");
+    }
+
+    // 4. Send to callSendAPI
+    // We pass the FILE PATH as a string because your index.js handles createReadStream
     await callSendAPI(sender_psid, {
-      attachment: {
-        type: "audio",
-        payload: {
-          is_reusable: true,
-        },
-      },
-      filedata: filePath, // Your callSendAPI needs to handle the local path/stream
+      attachment: { type: "audio" },
+      filedata: filePath 
     });
 
-    // 5. Cleanup file after sending
+    // 5. Cleanup after 2 minutes (gives FB time to process)
     setTimeout(() => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    }, 10000);
+    }, 120000);
+
   } catch (err) {
     console.error("Song Error:", err);
     callSendAPI(sender_psid, {
-      text: "❌ Error: Unable to fetch the song. Please try a different name.",
+      text: "❌ Error: Unable to fetch that song. Try a different title.",
     });
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }

@@ -16,8 +16,6 @@ if (!fs.existsSync(dirPath)) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-const cookiesPath = path.join(__dirname, "..", "cookies.txt");
-
 module.exports = async (sender_psid, callSendAPI, messageText) => {
   const query = messageText.replace(/^\/?song\s+/i, "").trim();
 
@@ -36,18 +34,19 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
       text: `⏳ ${randomMessage}`,
     });
 
-    // 1️⃣ SEARCH (proper ytsearch1 handling)
+    // 1️⃣ SEARCH (Android client, no cookies)
     const searchResult = await ytdlp(`ytsearch1:${query}`, {
       dumpSingleJson: true,
       noPlaylist: true,
       extractorArgs: "youtube:player_client=android",
-      cookies: fs.existsSync(cookiesPath) ? cookiesPath : undefined,
+      quiet: true,
     });
 
     if (
       !searchResult ||
       !searchResult.entries ||
-      !searchResult.entries.length
+      !searchResult.entries.length ||
+      !searchResult.entries[0]
     ) {
       throw new Error("No search results found");
     }
@@ -60,7 +59,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
       throw new Error("Invalid video URL");
     }
 
-    // 2️⃣ DOWNLOAD AUDIO (Android client bypass)
+    // 2️⃣ DOWNLOAD AUDIO
     await ytdlp(videoUrl, {
       extractAudio: true,
       audioFormat: "m4a",
@@ -69,7 +68,6 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
       ffmpegLocation: ffmpegPath,
       noPlaylist: true,
       extractorArgs: "youtube:player_client=android",
-      cookies: fs.existsSync(cookiesPath) ? cookiesPath : undefined,
       quiet: true,
     });
 
@@ -112,7 +110,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     await callSendAPI(sender_psid, {
       text:
-        "❌ Unable to fetch this song right now. It may be blocked or unavailable.",
+        "❌ Unable to fetch this song right now. YouTube may be blocking this server.",
     });
   }
 };

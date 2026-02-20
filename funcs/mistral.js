@@ -84,19 +84,25 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
   }
 
   try {
-    const result = await mistral.agents.complete({
-      agentId: "ag_019c76bbf73d70a4b805be900ed182cf",
-      messages: [{ role: "user", content: query }],
-    });
+  const result = await mistral.chat.complete({
+    model: "mistral-large-latest",
+    messages: [{ role: "user", content: query }],
+  });
 
-    let reply = result.choices?.[0]?.message?.content || "No response.";
+  let reply = result.choices?.[0]?.message?.content || "No response.";
 
-    // --- BOLD LOGIC START ---
-    // This Regex finds text inside ** ** and replaces it with the Unicode Bold version
-    reply = reply.replace(/\*\*(.*?)\*\*/g, (match, p1) => {
-      return makeBold(p1);
-    });
-    // --- BOLD LOGIC END ---
+  reply = reply.replace(/\*\*(.*?)\*\*/g, (match, p1) => {
+    return makeBold(p1);
+  });
+
+  return callSendAPI(sender_psid, { text: reply });
+
+} catch (error) {
+  console.error("Mistral Error:", error);
+  return callSendAPI(sender_psid, {
+    text: "❌ Unable to connect to the AI. Commands remain accessible for use.",
+  });
+}
 
     callSendAPI(sender_psid, { text: reply });
   } catch (error) {
@@ -106,3 +112,4 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     });
   }
 };
+

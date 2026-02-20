@@ -15,7 +15,6 @@ module.exports = async function (psid, callSendAPI, text) {
   const filePath = path.join(dir, `${Date.now()}.mp4`);
 
   try {
-    await callSendAPI(psid, { text: "⏳ Downloading TikTok video..." });
 
     const apiUrl = `https://tikdownpro.vercel.app/api/download?url=${encodeURIComponent(link)}`;
     const { data } = await axios.get(apiUrl);
@@ -86,3 +85,4 @@ module.exports = async function (psid, callSendAPI, text) {
     });
   }
 };
+

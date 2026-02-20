@@ -1,7 +1,6 @@
-const ytdlp = require("yt-dlp-exec");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const ffmpegPath = require("ffmpeg-static");
 
 const messages = [
   "🔍 Searching for your track...",
@@ -25,92 +24,87 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     });
   }
 
-  const filePath = path.join(dirPath, `song_${Date.now()}.m4a`);
   const randomMessage =
     messages[Math.floor(Math.random() * messages.length)];
 
+  const mp3Path = path.join(dirPath, `song_${Date.now()}.mp3`);
+
   try {
+    // ⏳ Processing message
     await callSendAPI(sender_psid, {
       text: `⏳ ${randomMessage}`,
     });
 
-    // 1️⃣ SEARCH (Android client, no cookies)
-    const searchResult = await ytdlp(`ytsearch1:${query}`, {
-      dumpSingleJson: true,
-      noPlaylist: true,
-      extractorArgs: "youtube:player_client=android",
-      quiet: true,
-    });
+    // 🔗 API REQUEST
+    const apiUrl = `https://betadash-api-swordslush-production.up.railway.app/spt?title=${encodeURIComponent(query)}`;
+    const { data } = await axios.get(apiUrl, { timeout: 60000 });
 
-    if (
-      !searchResult ||
-      !searchResult.entries ||
-      !searchResult.entries.length ||
-      !searchResult.entries[0]
-    ) {
-      throw new Error("No search results found");
+    if (!data || !data.download_url) {
+      throw new Error("Invalid API response");
     }
 
-    const video = searchResult.entries[0];
-    const videoUrl = video.webpage_url;
-    const title = video.title || "Unknown Title";
+    const title = data.title || "Unknown Title";
+    const artist = data.artists || "Unknown Artist";
 
-    if (!videoUrl) {
-      throw new Error("Invalid video URL");
-    }
+    // ⏱ Convert duration
+    const durationMs = Number(data.duration) || 0;
+    const totalSeconds = Math.floor(durationMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
 
-    // 2️⃣ DOWNLOAD AUDIO
-    await ytdlp(videoUrl, {
-      extractAudio: true,
-      audioFormat: "m4a",
-      format: "bestaudio",
-      output: filePath,
-      ffmpegLocation: ffmpegPath,
-      noPlaylist: true,
-      extractorArgs: "youtube:player_client=android",
-      quiet: true,
+    // 🎵 Download MP3
+    const audioRes = await axios.get(data.download_url, {
+      responseType: "arraybuffer",
+      timeout: 0,
+      maxRedirects: 10,
+      headers: { "User-Agent": "Mozilla/5.0" },
     });
 
-    if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(mp3Path, audioRes.data);
+
+    if (!fs.existsSync(mp3Path)) {
       throw new Error("Download failed");
     }
 
-    const stats = fs.statSync(filePath);
+    const stats = fs.statSync(mp3Path);
 
-    // Messenger 25MB limit
+    // 🚫 Messenger 25MB limit
     if (stats.size > 25 * 1024 * 1024) {
-      fs.unlinkSync(filePath);
+      fs.unlinkSync(mp3Path);
       throw new Error("File exceeds 25MB limit");
     }
 
-    // 3️⃣ SEND TITLE
+    // 📄 Send Info
     await callSendAPI(sender_psid, {
-      text: `🎵 Now Playing:\n${title}`,
+      text:
+        `🎧 𝗦𝗣𝗢𝗧𝗜𝗙𝗬 𝗦𝗧𝗬𝗟𝗘\n\n` +
+        `🎵 Title: ${title}\n` +
+        `🎤 Artist: ${artist}\n` +
+        `🕒 Duration: ${minutes}:${seconds}`,
     });
 
-    // 4️⃣ SEND AUDIO
+    // 🎶 Send Audio
     await callSendAPI(sender_psid, {
       attachment: { type: "audio", payload: {} },
-      filedata: filePath,
+      filedata: mp3Path,
     });
 
-    // 5️⃣ CLEANUP
+    // 🧹 Cleanup after 15s
     setTimeout(() => {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+      if (fs.existsSync(mp3Path)) {
+        fs.unlinkSync(mp3Path);
       }
     }, 15000);
 
   } catch (err) {
-    console.error("Song Error:", err.message);
+    console.error("Song API Error:", err.message);
 
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (fs.existsSync(mp3Path)) {
+      fs.unlinkSync(mp3Path);
     }
 
     await callSendAPI(sender_psid, {
-      text:
-        "❌ Unable to fetch this song right now. YouTube may be blocking this server.",
+      text: "❌ Unable to fetch this song right now. Please try again later.",
     });
   }
 };

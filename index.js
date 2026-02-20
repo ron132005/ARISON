@@ -3,7 +3,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 
-/** Ensure these files exist in a folder named 'funcs' relative to this script */
+/** Ensure these files exist in a folder named 'funcs' relative to this script. */
 const helpCommand = require("./funcs/help.js");
 const testCommand = require("./funcs/test.js");
 const mistralCommand = require("./funcs/mistral.js");
@@ -37,7 +37,6 @@ app.get("/webhook", (req, res) => {
     res.set("Content-Type", "text/plain");
     return res.status(200).send(challenge);
   }
-
   res.sendStatus(403);
 });
 
@@ -48,42 +47,28 @@ app.post("/webhook", (req, res) => {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
 
-      const psid = webhook_event.sender.id;
-      const messageID = webhook_event.message?.mid; // The ID to reply to
-
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(psid, callSendAPI, messageID);
+            return helpCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "OWNER_PAYLOAD":
-            return ownerCommand(psid, callSendAPI, messageID);
+            return ownerCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "MCU_PAYLOAD":
-            return mcuCommand(psid, callSendAPI, messageID);
+            return mcuCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "TEST_PAYLOAD":
-            return testCommand(psid, callSendAPI, messageID);
+            return testCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(psid, webhook_event.message.text, messageID);
-      }
-
-      // Postbacks (optional, if you add buttons template in future)
-      if (webhook_event?.postback?.payload) {
-        const payload = webhook_event.postback.payload;
-        switch (payload) {
-          case "HELP_PAYLOAD":
-            return helpCommand(psid, callSendAPI, messageID);
-          case "OWNER_PAYLOAD":
-            return ownerCommand(psid, callSendAPI, messageID);
-          case "MCU_PAYLOAD":
-            return mcuCommand(psid, callSendAPI, messageID);
-          case "TEST_PAYLOAD":
-            return testCommand(psid, callSendAPI, messageID);
-        }
+        handleMessage(
+          webhook_event.sender.id,
+          webhook_event.message.text,
+          webhook_event.message.mid
+        );
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -101,16 +86,19 @@ async function handleMessage(psid, text, messageID) {
 
   // --- /menu Quick Replies ---
   if (input === "/menu") {
-    return callSendAPI(psid, {
-      text: "Here’s a selection of things I can help you with. Pick an option below:",
-      quick_replies: [
-        { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
-        { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
-        { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
-        { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" }
-      ],
-      reply_to: messageID
-    });
+    return callSendAPI(
+      psid,
+      {
+        text: "Here’s a selection of things I can help you with. Pick an option from below:",
+        quick_replies: [
+          { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
+          { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
+          { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
+          { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" }
+        ],
+      },
+      messageID
+    );
   }
 
   // --- Exact Matches ---
@@ -118,18 +106,29 @@ async function handleMessage(psid, text, messageID) {
   if (input === "/test") return testCommand(psid, callSendAPI, messageID);
   if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
   if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
-  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!", reply_to: messageID });
+  if (input === "hi" || input === "hello")
+    return callSendAPI(psid, { text: "Hello!" }, messageID);
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame", reply_to: messageID });
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /song edamame" },
+        messageID
+      );
     return songCommand(psid, callSendAPI, query, messageID);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame", reply_to: messageID });
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /lyrics edamame" },
+        messageID
+      );
     return lyricsCommand(psid, callSendAPI, query, messageID);
   }
 
@@ -147,35 +146,20 @@ async function sendAction(psid, action) {
   return fbApi.post("", { recipient: { id: psid }, sender_action: action });
 }
 
-async function callSendAPI(psid, response) {
+async function callSendAPI(psid, response, replyToID = null) {
   try {
-    const payload = { recipient: { id: psid }, message: response };
+    const payload = {
+      recipient: { id: psid },
+      message: response,
+    };
 
-    // Attach reply_to if provided
-    if (response.reply_to) {
-      payload.message.reply_to = response.reply_to;
+    // Attach as a reply to the original message
+    if (replyToID) {
+      payload.message.reply_to = { mid: replyToID };
     }
 
-    if (response.filedata) {
-      const form = new FormData();
-      form.append("recipient", JSON.stringify({ id: psid }));
-      form.append(
-        "message",
-        JSON.stringify({
-          attachment: { type: response.attachment.type, payload: {} },
-          reply_to: response.reply_to || undefined
-        })
-      );
-      form.append("filedata", fs.createReadStream(response.filedata));
-
-      await axios.post(
-        "https://graph.facebook.com/v12.0/me/messages?access_token=" + PAGE_ACCESS_TOKEN,
-        form,
-        { headers: form.getHeaders() }
-      );
-    } else {
-      await fbApi.post("", payload);
-    }
+    // Send normal text or template
+    await fbApi.post("", payload);
   } catch (err) {
     console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
   }

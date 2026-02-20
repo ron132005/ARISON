@@ -127,48 +127,50 @@ async function sendAction(psid, action) {
 
 async function callSendAPI(psid, response) {
   try {
-    let payload;
-    let headers = {};
-
-    // 1. If sending a local file (e.g., MP3/MP4)
+    // 1️⃣ If sending a local file (image, gif, audio, video)
     if (response.filedata) {
       const form = new FormData();
       form.append("recipient", JSON.stringify({ id: psid }));
 
-      // FIX: We must wrap the type/payload inside an 'attachment' object
-      const messagePayload = {
-        attachment: {
-          type: response.attachment.type,
-          payload: {}, // Payload is empty because the file is in 'filedata'
-        },
-      };
+      // Messenger expects the attachment wrapped in message
+      form.append(
+        "message",
+        JSON.stringify({
+          attachment: {
+            type: response.attachment.type, // "image" for GIFs
+            payload: {},
+          },
+        })
+      );
 
-      form.append("message", JSON.stringify(messagePayload));
+      // Append file as stream
       form.append("filedata", fs.createReadStream(response.filedata));
 
-      payload = form;
-      headers = form.getHeaders();
-    }
-    // 2. If sending standard text or generic templates
+      await axios.post(
+        "https://graph.facebook.com/v12.0/me/messages?access_token=" +
+          PAGE_ACCESS_TOKEN,
+        form,
+        { headers: form.getHeaders() }
+      );
+    } 
+    // 2️⃣ Otherwise send normal text or template
     else {
-      payload = {
+      await fbApi.post("", {
         recipient: { id: psid },
         message: response,
-      };
+      });
     }
-
-    await fbApi.post("", payload, { headers });
   } catch (err) {
-    // Stringify the error so you can see the full Facebook explanation
     console.error(
       "Send Error:",
-      JSON.stringify(err.response?.data, null, 2) || err.message,
+      JSON.stringify(err.response?.data, null, 2) || err.message
     );
   }
 }
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

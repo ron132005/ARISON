@@ -41,32 +41,40 @@ app.get("/webhook", (req, res) => {
 });
 
 // --- Webhook message handler ---
-app.post("/webhook", (req, res) => {
+app.post("/webhook", async (req, res) => {
   const { body } = req;
   if (body.object === "page") {
-    body.entry.forEach((entry) => {
+    for (const entry of body.entry) {
       const webhook_event = entry.messaging?.[0];
+      if (!webhook_event) continue;
+
+      const psid = webhook_event.sender.id;
 
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            await helpCommand(psid, callSendAPI, webhook_event.message.mid);
+            break;
           case "OWNER_PAYLOAD":
-            return ownerCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            await ownerCommand(psid, callSendAPI, webhook_event.message.mid);
+            break;
           case "MCU_PAYLOAD":
-            return mcuCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            await mcuCommand(psid, callSendAPI, webhook_event.message.mid);
+            break;
           case "TEST_PAYLOAD":
-            return testCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            await testCommand(psid, callSendAPI, webhook_event.message.mid);
+            break;
         }
+        continue; // Skip further processing for quick reply
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(webhook_event.sender.id, webhook_event.message.text, webhook_event.message.mid);
+        await handleMessage(psid, webhook_event.message.text, webhook_event.message.mid);
       }
-    });
+    }
     return res.status(200).send("EVENT_RECEIVED");
   }
   res.sendStatus(404);
@@ -74,6 +82,7 @@ app.post("/webhook", (req, res) => {
 
 // --- Logic Router ---
 async function handleMessage(psid, text, messageID) {
+  // Fire indicators (Seen/Typing)
   await Promise.all([sendAction(psid, "mark_seen"), sendAction(psid, "typing_on")]).catch(
     (err) => console.error("Action Error:", err.message)
   );
@@ -102,18 +111,29 @@ async function handleMessage(psid, text, messageID) {
   if (input === "/test") return testCommand(psid, callSendAPI, messageID);
   if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
   if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
-  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, messageID);
+  if (input === "hi" || input === "hello")
+    return callSendAPI(psid, { text: "Hello!" }, messageID);
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, messageID);
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /song edamame" },
+        messageID
+      );
     return songCommand(psid, callSendAPI, query, messageID);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, messageID);
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /lyrics edamame" },
+        messageID
+      );
     return lyricsCommand(psid, callSendAPI, query, messageID);
   }
 
@@ -151,8 +171,7 @@ async function callSendAPI(psid, response, messageID = null) {
       await fbApi.post("", {
         recipient: { id: psid },
         message: response,
-        messaging_type: "RESPONSE",          // Official reply type
-        reply_to_message_id: messageID || undefined, // Reply to triggering message
+        messaging_type: "RESPONSE", // Marks as reply in Messenger
       });
     }
   } catch (err) {

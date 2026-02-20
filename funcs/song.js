@@ -3,42 +3,75 @@ const fs = require("fs");
 const path = require("path");
 const ffmpegPath = require("ffmpeg-static");
 
-const dirPath = "/tmp/songs";
+const messages = [
+  "🔍 Initiating auditory scan… detecting your track now.",
+  "🎧 Commencing music retrieval sequence…",
+  "🚀 Engaging sonic propulsion for optimal tune acquisition…",
+  "🎶 Calibrating audio frequencies for your selection…",
+  "🎯 Target successfully acquired, preparing transmission…",
+  "🔊 Audio ready for deployment…",
+];
+
+const dirPath = path.join(__dirname, "..", "temp", "song");
 if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
-module.exports = async (sender_psid, callSendAPI, query) => {
-  const filePath = path.join(dirPath, `song_${Date.now()}.m4a`);
+module.exports = async (sender_psid, callSendAPI, messageText) => {
+  // Extract query: assuming command is "/song [name]" or "song [name]"
+  const query = messageText.replace(/^\/?song\s+/i, "").trim();
 
-  try {
-    await callSendAPI(sender_psid, { text: "⏳ Processing your request..." });
+  if (!query) {
+    return callSendAPI(sender_psid, { text: "⚠️ Usage: /song [song name]" });
+  }
 
-    await ytdlp(`ytsearch1:${query}`, {
-      extractAudio: true,
-      audioFormat: "m4a",
-      output: filePath,
-      ffmpegLocation: ffmpegPath,
-      noCheckCertificates: true,
-      noPlaylist: true,
-      forceIpv4: true, // IMPORTANT: Fixes many connection issues on cloud hosts
-      addHeader: [
-        'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      ]
-    });
+  const filePath = path.join(dirPath, `song_${Date.now()}.m4a`);
+  const randomMessage = messages[Math.floor(Math.random() * messages.length)];
 
-    if (fs.existsSync(filePath)) {
-      await callSendAPI(sender_psid, {
-        attachment: { type: "audio" },
-        filedata: filePath 
-      });
+  try {
+    // 1. Send initial status message
+    await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
-      // Cleanup
-      setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 60000);
-    } else {
-      throw new Error("Download completed but file not found.");
-    }
+    // 2. Fetch metadata using yt-dlp
+    const info = await ytdlp(`ytsearch1:${query}`, {
+      dumpSingleJson: true,
+      noPlaylist: true,
+      preferFreeFormats: true,
+    });
 
-  } catch (err) {
-    console.error("DETAILED ERROR:", err); // This will show in Render logs
-    callSendAPI(sender_psid, { text: "❌ Connection error. Please try again in a moment." });
-  }
-};
+    const videoInfo = Array.isArray(info) ? info[0] : info;
+    const title = videoInfo.title || "Unknown Title";
+
+    // 3. Download the audio
+    await ytdlp(videoInfo.webpage_url, {
+      extractAudio: true,
+      audioFormat: "m4a",
+      format: "bestaudio[ext=m4a]/tiny",
+      output: filePath,
+      ffmpegLocation: ffmpegPath,
+      noPlaylist: true,
+    });
+
+    // 4. Send the file
+    // NOTE: Official FB API requires a specific structure for attachments.
+    // Most 'callSendAPI' helpers for official bots use a URL or a stream.
+    await callSendAPI(sender_psid, {
+      attachment: {
+        type: "audio",
+        payload: {
+          is_reusable: true,
+        },
+      },
+      filedata: filePath, // Your callSendAPI needs to handle the local path/stream
+    });
+
+    // 5. Cleanup file after sending
+    setTimeout(() => {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }, 10000);
+  } catch (err) {
+    console.error("Song Error:", err);
+    callSendAPI(sender_psid, {
+      text: "❌ Error: Unable to fetch the song. Please try a different name.",
+    });
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+}; 

@@ -22,7 +22,7 @@ module.exports = (sender_psid, callSendAPI) => {
 
     // Messenger requires file uploads via FormData
     const gifMessage = {
-      attachment: { type: "image", payload: {} },
+      attachment: { type: "video", payload: {} },
       filedata: gifPath
     };
 

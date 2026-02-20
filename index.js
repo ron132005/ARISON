@@ -59,6 +59,8 @@ app.post("/webhook", (req, res) => {
             return ownerCommand(webhook_event.sender.id, callSendAPI);
           case "MCU_PAYLOAD":
             return mcuCommand(webhook_event.sender.id, callSendAPI);
+          case "SONG_PAYLOAD":
+            return songCommand(webhook_event.sender.id, callSendAPI);
         }
       }
 
@@ -87,7 +89,8 @@ async function handleMessage(psid, text) {
       quick_replies: [
         { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
         { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
-        { content_type: "text", title: "MCU Countown", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "Song", payload: "SONG_PAYLOAD" },
       ],
     });
   }
@@ -158,4 +161,5 @@ app.get("/health", (req, res) => {
 });
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 

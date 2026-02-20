@@ -153,6 +153,9 @@ async function callSendAPI(psid, response) {
     console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
   }
 }
-
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+

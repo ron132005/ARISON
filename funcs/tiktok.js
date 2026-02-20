@@ -59,9 +59,8 @@ module.exports = async function (psid, callSendAPI, text) {
       throw new Error("Video exceeds 25MB Messenger limit");
     }
 
-    await callSendAPI(psid, { text: `🎬 ${caption}` });
-
     await callSendAPI(psid, {
+      text: `🎬 ${caption}`, 
       attachment: {
         type: "video",
         payload: {},
@@ -86,3 +85,4 @@ module.exports = async function (psid, callSendAPI, text) {
     });
   }
 };
+

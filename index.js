@@ -14,6 +14,7 @@ const songCommand = require("./funcs/song.js");
 const tiktokCommand = require("./funcs/tiktok.js");
 const lyricsCommand = require("./funcs/lyrics.js");
 const ownerCommand = require("./funcs/owner.js");
+const mcuCommand = require("./funcs/mcu.js");
 
 const app = express().use(express.json());
 
@@ -81,6 +82,7 @@ async function handleMessage(psid, text) {
   if (input === "/help") return helpCommand(psid, callSendAPI);
   if (input === "/test") return testCommand(psid, callSendAPI);
   if (input === "/owner") return ownerCommand(psid, callSendAPI);
+  if (input === "/mcu") return mcuCommand(psid, callSendAPI);
   if (input === "hi" || input === "hello")
     return callSendAPI(psid, { text: "Hello!" });
 
@@ -170,6 +172,7 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

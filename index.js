@@ -16,13 +16,12 @@ const mcuCommand = require("./funcs/mcu.js");
 const app = express().use(express.json());
 
 // --- TOKENS ---
-const PAGE_ACCESS_TOKEN =
-  "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
+const PAGE_ACCESS_TOKEN = "YOUR_PAGE_ACCESS_TOKEN";
 const VERIFY_TOKEN = "getroned";
 
 // Pre-configure axios
 const fbApi = axios.create({
-  baseURL: "https://graph.facebook.com/v12.0/me/messages",
+  baseURL: "https://graph.facebook.com/v25.0/me/messages",
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
@@ -46,28 +45,34 @@ app.post("/webhook", (req, res) => {
   if (body.object === "page") {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
-
-      const psid = webhook_event.sender.id;
-      const messageID = webhook_event.message?.mid || null;
+      const message_id = webhook_event?.message?.mid;
 
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(psid, callSendAPI, messageID);
+            return helpCommand(webhook_event.sender.id, (resp) =>
+              callSendAPI(webhook_event.sender.id, resp, message_id)
+            );
           case "OWNER_PAYLOAD":
-            return ownerCommand(psid, callSendAPI, messageID);
+            return ownerCommand(webhook_event.sender.id, (resp) =>
+              callSendAPI(webhook_event.sender.id, resp, message_id)
+            );
           case "MCU_PAYLOAD":
-            return mcuCommand(psid, callSendAPI, messageID);
+            return mcuCommand(webhook_event.sender.id, (resp) =>
+              callSendAPI(webhook_event.sender.id, resp, message_id)
+            );
           case "TEST_PAYLOAD":
-            return testCommand(psid, callSendAPI, messageID);
+            return testCommand(webhook_event.sender.id, (resp) =>
+              callSendAPI(webhook_event.sender.id, resp, message_id)
+            );
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(psid, webhook_event.message.text, messageID);
+        handleMessage(webhook_event.sender.id, webhook_event.message.text, message_id);
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -76,7 +81,7 @@ app.post("/webhook", (req, res) => {
 });
 
 // --- Logic Router ---
-async function handleMessage(psid, text, messageID) {
+async function handleMessage(psid, text, message_id) {
   await Promise.all([sendAction(psid, "mark_seen"), sendAction(psid, "typing_on")]).catch(
     (err) => console.error("Action Error:", err.message)
   );
@@ -93,42 +98,51 @@ async function handleMessage(psid, text, messageID) {
           { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
           { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
           { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
-          { content_type: "text", title: "Test Command", payload: "TEST_PAYLOAD" },
+          { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" },
         ],
       },
-      messageID
+      message_id
     );
   }
 
   // --- Exact Matches ---
-  if (input === "/help") return helpCommand(psid, callSendAPI, messageID);
-  if (input === "/test") return testCommand(psid, callSendAPI, messageID);
-  if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
-  if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
-  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, messageID);
+  if (input === "/help") return helpCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
+  if (input === "/test") return testCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
+  if (input === "/owner") return ownerCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
+  if (input === "/mcu") return mcuCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
+  if (input === "hi" || input === "hello")
+    return callSendAPI(psid, { text: "Hello!" }, message_id);
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
     if (!query)
-      return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, messageID);
-    return songCommand(psid, callSendAPI, query, messageID);
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /song edamame" },
+        message_id
+      );
+    return songCommand(psid, (resp) => callSendAPI(psid, resp, message_id), query);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
     if (!query)
-      return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, messageID);
-    return lyricsCommand(psid, callSendAPI, query, messageID);
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /lyrics edamame" },
+        message_id
+      );
+    return lyricsCommand(psid, (resp) => callSendAPI(psid, resp, message_id), query);
   }
 
   // --- TikTok (disabled example) ---
   if (input.includes("tiktok.comDISABLED")) {
-    return tiktokCommand(psid, callSendAPI, text, messageID);
+    return tiktokCommand(psid, (resp) => callSendAPI(psid, resp, message_id), text);
   }
 
   // --- Fallback AI ---
-  return mistralCommand(psid, callSendAPI, text, messageID);
+  return mistralCommand(psid, (resp) => callSendAPI(psid, resp, message_id), text);
 }
 
 // --- API Helpers ---
@@ -136,35 +150,36 @@ async function sendAction(psid, action) {
   return fbApi.post("", { recipient: { id: psid }, sender_action: action });
 }
 
-async function callSendAPI(psid, response, messageID = null) {
+async function callSendAPI(psid, response, reply_to_mid = null) {
   try {
     const payload = {
       recipient: { id: psid },
+      messaging_type: "RESPONSE",
       message: response,
     };
 
-    // Add reply-to message reference
-    if (messageID) {
-      payload.message.message_reference = { message_id: messageID };
+    if (reply_to_mid) {
+      payload.message.reply_to = { mid: reply_to_mid };
     }
 
-    // Send local file
+    // Send local file if present
     if (response.filedata) {
       const form = new FormData();
       form.append("recipient", JSON.stringify({ id: psid }));
       form.append(
         "message",
-        JSON.stringify({ attachment: { type: response.attachment.type, payload: {} } })
+        JSON.stringify({
+          attachment: { type: response.attachment.type, payload: {} },
+        })
       );
       form.append("filedata", fs.createReadStream(response.filedata));
 
       await axios.post(
-        "https://graph.facebook.com/v12.0/me/messages?access_token=" + PAGE_ACCESS_TOKEN,
+        `https://graph.facebook.com/v25.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
         form,
         { headers: form.getHeaders() }
       );
     } else {
-      // Normal text/template
       await fbApi.post("", payload);
     }
   } catch (err) {

@@ -97,11 +97,7 @@ async function handleMessage(psid, text) {
     return songCommand(psid, callSendAPI, query);
   }
 
-  // 3. Fallback (If no command matches, use AI)
-  return mistralCommand(psid, callSendAPI, text);
-}
-
-if (input.startsWith("/lyrics")) {
+  if (input.startsWith("/lyrics")) {
     // Splits by space, removes the "/song" part, and joins the rest as the song title
     const query = text.split(" ").slice(1).join(" ");
 
@@ -171,4 +167,5 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 

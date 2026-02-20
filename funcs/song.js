@@ -4,16 +4,17 @@ const path = require("path");
 const ffmpegPath = require("ffmpeg-static");
 
 const messages = [
-  "🔍 Initiating auditory scan… detecting your track now.",
-  "🎧 Commencing music retrieval sequence…",
-  "🚀 Engaging sonic propulsion for optimal tune acquisition…",
-  "🎶 Calibrating audio frequencies for your selection…",
-  "🎯 Target successfully acquired, preparing transmission…",
-  "🔊 Audio ready for deployment…",
+  "🔍 Searching for your track...",
+  "🎧 Fetching the audio...",
+  "🚀 Preparing your song...",
+  "🎶 Processing request...",
+  "🎯 Almost ready...",
 ];
 
 const dirPath = path.join(__dirname, "..", "temp", "song");
-if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
+if (!fs.existsSync(dirPath)) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
 
 const cookiesPath = path.join(__dirname, "..", "cookies.txt");
 
@@ -31,30 +32,44 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     messages[Math.floor(Math.random() * messages.length)];
 
   try {
-    await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
-
-    // 1️⃣ Search YouTube
-    const info = await ytdlp(`ytsearch1:${query}`, {
-      dumpSingleJson: true,
-      noPlaylist: true,
-      cookies: cookiesPath,
+    await callSendAPI(sender_psid, {
+      text: `⏳ ${randomMessage}`,
     });
 
-    if (!info || !info.webpage_url) {
+    // 1️⃣ SEARCH (proper ytsearch1 handling)
+    const searchResult = await ytdlp(`ytsearch1:${query}`, {
+      dumpSingleJson: true,
+      noPlaylist: true,
+      extractorArgs: "youtube:player_client=android",
+      cookies: fs.existsSync(cookiesPath) ? cookiesPath : undefined,
+    });
+
+    if (
+      !searchResult ||
+      !searchResult.entries ||
+      !searchResult.entries.length
+    ) {
       throw new Error("No search results found");
     }
 
-    const title = info.title || "Unknown Title";
+    const video = searchResult.entries[0];
+    const videoUrl = video.webpage_url;
+    const title = video.title || "Unknown Title";
 
-    // 2️⃣ Download best audio under Messenger limit
-    await ytdlp(info.webpage_url, {
+    if (!videoUrl) {
+      throw new Error("Invalid video URL");
+    }
+
+    // 2️⃣ DOWNLOAD AUDIO (Android client bypass)
+    await ytdlp(videoUrl, {
       extractAudio: true,
       audioFormat: "m4a",
-      format: "bestaudio[filesize<25M]/bestaudio",
+      format: "bestaudio",
       output: filePath,
       ffmpegLocation: ffmpegPath,
       noPlaylist: true,
-      cookies: cookiesPath,
+      extractorArgs: "youtube:player_client=android",
+      cookies: fs.existsSync(cookiesPath) ? cookiesPath : undefined,
       quiet: true,
     });
 
@@ -66,33 +81,38 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     // Messenger 25MB limit
     if (stats.size > 25 * 1024 * 1024) {
+      fs.unlinkSync(filePath);
       throw new Error("File exceeds 25MB limit");
     }
 
-    // 3️⃣ Send title
+    // 3️⃣ SEND TITLE
     await callSendAPI(sender_psid, {
       text: `🎵 Now Playing:\n${title}`,
     });
 
-    // 4️⃣ Send audio
+    // 4️⃣ SEND AUDIO
     await callSendAPI(sender_psid, {
       attachment: { type: "audio", payload: {} },
       filedata: filePath,
     });
 
-    // 5️⃣ Cleanup
+    // 5️⃣ CLEANUP
     setTimeout(() => {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
     }, 15000);
 
   } catch (err) {
     console.error("Song Error:", err.message);
 
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
     await callSendAPI(sender_psid, {
       text:
-        "❌ Error: Unable to fetch the song. It may be unavailable or blocked by YouTube.",
+        "❌ Unable to fetch this song right now. It may be blocked or unavailable.",
     });
-
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 };

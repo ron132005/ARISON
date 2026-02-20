@@ -3,7 +3,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 
-/** Ensure these files exist in a folder named 'funcs' relative to this script. */
+/** Ensure these files exist in a folder named 'funcs' relative to this script */
 const helpCommand = require("./funcs/help.js");
 const testCommand = require("./funcs/test.js");
 const mistralCommand = require("./funcs/mistral.js");
@@ -47,28 +47,27 @@ app.post("/webhook", (req, res) => {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
 
+      const psid = webhook_event.sender.id;
+      const messageID = webhook_event.message?.mid || null;
+
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            return helpCommand(psid, callSendAPI, messageID);
           case "OWNER_PAYLOAD":
-            return ownerCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            return ownerCommand(psid, callSendAPI, messageID);
           case "MCU_PAYLOAD":
-            return mcuCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            return mcuCommand(psid, callSendAPI, messageID);
           case "TEST_PAYLOAD":
-            return testCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
+            return testCommand(psid, callSendAPI, messageID);
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(
-          webhook_event.sender.id,
-          webhook_event.message.text,
-          webhook_event.message.mid
-        );
+        handleMessage(psid, webhook_event.message.text, messageID);
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -89,12 +88,12 @@ async function handleMessage(psid, text, messageID) {
     return callSendAPI(
       psid,
       {
-        text: "Here’s a selection of things I can help you with. Pick an option from below:",
+        text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
         quick_replies: [
           { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
           { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
           { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
-          { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" }
+          { content_type: "text", title: "Test Command", payload: "TEST_PAYLOAD" },
         ],
       },
       messageID
@@ -106,29 +105,20 @@ async function handleMessage(psid, text, messageID) {
   if (input === "/test") return testCommand(psid, callSendAPI, messageID);
   if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
   if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
-  if (input === "hi" || input === "hello")
-    return callSendAPI(psid, { text: "Hello!" }, messageID);
+  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, messageID);
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
     if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /song edamame" },
-        messageID
-      );
+      return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, messageID);
     return songCommand(psid, callSendAPI, query, messageID);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
     if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /lyrics edamame" },
-        messageID
-      );
+      return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, messageID);
     return lyricsCommand(psid, callSendAPI, query, messageID);
   }
 
@@ -146,20 +136,37 @@ async function sendAction(psid, action) {
   return fbApi.post("", { recipient: { id: psid }, sender_action: action });
 }
 
-async function callSendAPI(psid, response, replyToID = null) {
+async function callSendAPI(psid, response, messageID = null) {
   try {
     const payload = {
       recipient: { id: psid },
       message: response,
     };
 
-    // Attach as a reply to the original message
-    if (replyToID) {
-      payload.message.reply_to = { mid: replyToID };
+    // Add reply-to message reference
+    if (messageID) {
+      payload.message.message_reference = { message_id: messageID };
     }
 
-    // Send normal text or template
-    await fbApi.post("", payload);
+    // Send local file
+    if (response.filedata) {
+      const form = new FormData();
+      form.append("recipient", JSON.stringify({ id: psid }));
+      form.append(
+        "message",
+        JSON.stringify({ attachment: { type: response.attachment.type, payload: {} } })
+      );
+      form.append("filedata", fs.createReadStream(response.filedata));
+
+      await axios.post(
+        "https://graph.facebook.com/v12.0/me/messages?access_token=" + PAGE_ACCESS_TOKEN,
+        form,
+        { headers: form.getHeaders() }
+      );
+    } else {
+      // Normal text/template
+      await fbApi.post("", payload);
+    }
   } catch (err) {
     console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
   }

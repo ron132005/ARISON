@@ -1,7 +1,4 @@
-const ytdlp = require("yt-dlp-exec").create({
-  binary: require("yt-dlp-exec/bin"),
-});
-
+const ytdlp = require("yt-dlp-exec"); // just require normally
 const fs = require("fs");
 const path = require("path");
 const ffmpegPath = require("ffmpeg-static");
@@ -16,11 +13,7 @@ const messages = [
 ];
 
 const dirPath = path.join(__dirname, "..", "temp", "song");
-
-// Ensure temp directory exists
-if (!fs.existsSync(dirPath)) {
-  fs.mkdirSync(dirPath, { recursive: true });
-}
+if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
 module.exports = async (sender_psid, callSendAPI, messageText) => {
   const query = messageText.replace(/^\/?song\s+/i, "").trim();
@@ -36,11 +29,9 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
   try {
     // 1️⃣ Send initial status
-    await callSendAPI(sender_psid, {
-      text: `⏳ ${randomMessage}`,
-    });
+    await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
-    // 2️⃣ Search video
+    // 2️⃣ Fetch metadata
     const info = await ytdlp(`ytsearch1:${query}`, {
       dumpSingleJson: true,
       noPlaylist: true,
@@ -48,15 +39,9 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     });
 
     const videoInfo = Array.isArray(info) ? info[0] : info;
+    if (!videoInfo || !videoInfo.webpage_url) throw new Error("No video found");
 
-    if (!videoInfo || !videoInfo.webpage_url) {
-      throw new Error("No video found");
-    }
-
-    const title = videoInfo.title || "Unknown Title";
-
-    console.log("Downloading:", title);
-    console.log("URL:", videoInfo.webpage_url);
+    console.log("Downloading:", videoInfo.title, videoInfo.webpage_url);
 
     // 3️⃣ Download audio
     await ytdlp(videoInfo.webpage_url, {
@@ -68,44 +53,23 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
       noPlaylist: true,
     });
 
-    // Verify file exists
-    if (!fs.existsSync(filePath)) {
-      throw new Error("File was not created");
-    }
+    if (!fs.existsSync(filePath)) throw new Error("File not created");
 
-    console.log("Download complete:", filePath);
-
-    // 4️⃣ Send file (your existing callSendAPI must support local file path)
+    // 4️⃣ Send file
     await callSendAPI(sender_psid, {
-      attachment: {
-        type: "audio",
-        payload: {
-          is_reusable: true,
-        },
-      },
+      attachment: { type: "audio", payload: { is_reusable: true } },
       filedata: filePath,
     });
 
-    // 5️⃣ Cleanup after 15 seconds
+    // 5️⃣ Cleanup
     setTimeout(() => {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        console.log("Temp file deleted");
-      }
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }, 15000);
 
   } catch (err) {
     console.error("========== SONG ERROR ==========");
-    console.error("Message:", err.message);
-    console.error("STDERR:", err.stderr);
-    console.error("STDOUT:", err.stdout);
-    console.error("Full Error:", err);
-    console.error("================================");
-
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-
+    console.error(err);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     await callSendAPI(sender_psid, {
       text: "❌ Error: Unable to fetch the song. Please try a different name.",
     });

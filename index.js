@@ -72,7 +72,7 @@ async function handleMessage(psid, text) {
   // --- ROUTING LOGIC ---
 
   // 0. Always running commands
-  if (input.includes("tiktok.com")) {
+  if (input.includes("tiktok.comDISABLED")) {
     // Calls the required tiktokCommand from ./funcs/tiktok.js
     return tiktokCommand(psid, callSendAPI, text);
   }
@@ -170,6 +170,7 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

@@ -118,8 +118,8 @@ async function handleMessage(psid, text) {
     return lyricsCommand(psid, callSendAPI, query);
   }
 
-  // --- TikTok (disabled example) ---
-  if (input.includes("tiktok.comDISABLED")) {
+  // --- TikTok ---
+  if (input.includes("tiktok.com")) {
     return tiktokCommand(psid, callSendAPI, text);
   }
 
@@ -164,6 +164,7 @@ app.get("/health", (req, res) => {
 });
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

@@ -3,7 +3,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 
-/** * IMPORTANT: Ensure these files exist in a folder named 'funcs' relative to this script. */
+/** Ensure these files exist in a folder named 'funcs' relative to this script */
 const helpCommand = require("./funcs/help.js");
 const testCommand = require("./funcs/test.js");
 const mistralCommand = require("./funcs/mistral.js");
@@ -48,22 +48,42 @@ app.post("/webhook", (req, res) => {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
 
+      const psid = webhook_event.sender.id;
+      const messageID = webhook_event.message?.mid; // The ID to reply to
+
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(webhook_event.sender.id, callSendAPI);
+            return helpCommand(psid, callSendAPI, messageID);
           case "OWNER_PAYLOAD":
-            return ownerCommand(webhook_event.sender.id, callSendAPI);
+            return ownerCommand(psid, callSendAPI, messageID);
           case "MCU_PAYLOAD":
-            return mcuCommand(webhook_event.sender.id, callSendAPI);
+            return mcuCommand(psid, callSendAPI, messageID);
+          case "TEST_PAYLOAD":
+            return testCommand(psid, callSendAPI, messageID);
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(webhook_event.sender.id, webhook_event.message.text);
+        handleMessage(psid, webhook_event.message.text, messageID);
+      }
+
+      // Postbacks (optional, if you add buttons template in future)
+      if (webhook_event?.postback?.payload) {
+        const payload = webhook_event.postback.payload;
+        switch (payload) {
+          case "HELP_PAYLOAD":
+            return helpCommand(psid, callSendAPI, messageID);
+          case "OWNER_PAYLOAD":
+            return ownerCommand(psid, callSendAPI, messageID);
+          case "MCU_PAYLOAD":
+            return mcuCommand(psid, callSendAPI, messageID);
+          case "TEST_PAYLOAD":
+            return testCommand(psid, callSendAPI, messageID);
+        }
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -72,7 +92,7 @@ app.post("/webhook", (req, res) => {
 });
 
 // --- Logic Router ---
-async function handleMessage(psid, text) {
+async function handleMessage(psid, text, messageID) {
   await Promise.all([sendAction(psid, "mark_seen"), sendAction(psid, "typing_on")]).catch(
     (err) => console.error("Action Error:", err.message)
   );
@@ -82,42 +102,44 @@ async function handleMessage(psid, text) {
   // --- /menu Quick Replies ---
   if (input === "/menu") {
     return callSendAPI(psid, {
-      text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
+      text: "Here’s a selection of things I can help you with. Pick an option below:",
       quick_replies: [
         { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
         { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
-        { content_type: "text", title: "MCU Countown", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" }
       ],
+      reply_to: messageID
     });
   }
 
   // --- Exact Matches ---
-  if (input === "/help") return helpCommand(psid, callSendAPI);
-  if (input === "/test") return testCommand(psid, callSendAPI);
-  if (input === "/owner") return ownerCommand(psid, callSendAPI);
-  if (input === "/mcu") return mcuCommand(psid, callSendAPI);
-  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" });
+  if (input === "/help") return helpCommand(psid, callSendAPI, messageID);
+  if (input === "/test") return testCommand(psid, callSendAPI, messageID);
+  if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
+  if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
+  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!", reply_to: messageID });
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" });
-    return songCommand(psid, callSendAPI, query);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame", reply_to: messageID });
+    return songCommand(psid, callSendAPI, query, messageID);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" });
-    return lyricsCommand(psid, callSendAPI, query);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame", reply_to: messageID });
+    return lyricsCommand(psid, callSendAPI, query, messageID);
   }
 
   // --- TikTok (disabled example) ---
   if (input.includes("tiktok.comDISABLED")) {
-    return tiktokCommand(psid, callSendAPI, text);
+    return tiktokCommand(psid, callSendAPI, text, messageID);
   }
 
   // --- Fallback AI ---
-  return mistralCommand(psid, callSendAPI, text);
+  return mistralCommand(psid, callSendAPI, text, messageID);
 }
 
 // --- API Helpers ---
@@ -127,7 +149,13 @@ async function sendAction(psid, action) {
 
 async function callSendAPI(psid, response) {
   try {
-    // Send local file
+    const payload = { recipient: { id: psid }, message: response };
+
+    // Attach reply_to if provided
+    if (response.reply_to) {
+      payload.message.reply_to = response.reply_to;
+    }
+
     if (response.filedata) {
       const form = new FormData();
       form.append("recipient", JSON.stringify({ id: psid }));
@@ -135,6 +163,7 @@ async function callSendAPI(psid, response) {
         "message",
         JSON.stringify({
           attachment: { type: response.attachment.type, payload: {} },
+          reply_to: response.reply_to || undefined
         })
       );
       form.append("filedata", fs.createReadStream(response.filedata));
@@ -145,8 +174,7 @@ async function callSendAPI(psid, response) {
         { headers: form.getHeaders() }
       );
     } else {
-      // Send normal text or template
-      await fbApi.post("", { recipient: { id: psid }, message: response });
+      await fbApi.post("", payload);
     }
   } catch (err) {
     console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
@@ -155,4 +183,3 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
-

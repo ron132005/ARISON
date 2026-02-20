@@ -1,8 +1,6 @@
+const ytdlp = require("yt-dlp-exec");
 const fs = require("fs");
 const path = require("path");
-const ytdl = require("ytdl-core");
-const YouTube = require("youtube-sr").default;
-const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 
 const messages = [
@@ -27,47 +25,71 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
   }
 
   const filePath = path.join(dirPath, `song_${Date.now()}.m4a`);
-  const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+  const randomMessage =
+    messages[Math.floor(Math.random() * messages.length)];
 
   try {
     await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
     // 1️⃣ Search YouTube
-    const video = await YouTube.searchOne(query);
-    if (!video) throw new Error("No video found");
-
-    console.log("Downloading:", video.title, video.url);
-
-    // 2️⃣ Stream & convert audio
-    await new Promise((resolve, reject) => {
-      ffmpeg(ytdl(video.url, { filter: "audioonly", quality: "highestaudio" }))
-        .setFfmpegPath(ffmpegPath)
-        .audioBitrate(128)
-        .toFormat("m4a")
-        .save(filePath)
-        .on("end", resolve)
-        .on("error", reject);
+    const info = await ytdlp(`ytsearch1:${query}`, {
+      dumpSingleJson: true,
+      noPlaylist: true,
     });
 
-    console.log("Download complete:", filePath);
+    if (!info || !info.webpage_url) {
+      throw new Error("No search results found");
+    }
 
-    // 3️⃣ Send file
+    const title = info.title || "Unknown Title";
+
+    // 2️⃣ Download best audio under 25MB limit
+    await ytdlp(info.webpage_url, {
+      extractAudio: true,
+      audioFormat: "m4a",
+      format: "bestaudio[filesize<25M]/bestaudio",
+      output: filePath,
+      ffmpegLocation: ffmpegPath,
+      noPlaylist: true,
+      quiet: true,
+    });
+
+    // 3️⃣ Ensure file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error("File download failed");
+    }
+
+    const stats = fs.statSync(filePath);
+
+    // Messenger limit check (25MB)
+    if (stats.size > 25 * 1024 * 1024) {
+      throw new Error("File exceeds Messenger size limit");
+    }
+
+    // 4️⃣ Send title first
     await callSendAPI(sender_psid, {
-      attachment: { type: "audio", payload: { is_reusable: true } },
+      text: `🎵 Now Playing:\n${title}`,
+    });
+
+    // 5️⃣ Send audio file
+    await callSendAPI(sender_psid, {
+      attachment: { type: "audio", payload: {} },
       filedata: filePath,
     });
 
-    // 4️⃣ Cleanup
+    // 6️⃣ Cleanup
     setTimeout(() => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }, 15000);
 
   } catch (err) {
-    console.error("========== SONG ERROR ==========");
-    console.error(err);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    console.error("Song Error:", err.message);
+
     await callSendAPI(sender_psid, {
-      text: "❌ Error: Unable to fetch the song. Please try a different name.",
+      text:
+        "❌ Error: Unable to fetch the song. It may be unavailable or too large.",
     });
+
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 };

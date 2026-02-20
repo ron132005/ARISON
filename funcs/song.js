@@ -1,6 +1,8 @@
-const ytdlp = require("yt-dlp-exec"); // just require normally
 const fs = require("fs");
 const path = require("path");
+const ytdl = require("ytdl-core");
+const YouTube = require("youtube-sr").default;
+const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 
 const messages = [
@@ -28,40 +30,34 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
   const randomMessage = messages[Math.floor(Math.random() * messages.length)];
 
   try {
-    // 1️⃣ Send initial status
     await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
-    // 2️⃣ Fetch metadata
-    const info = await ytdlp(`ytsearch1:${query}`, {
-      dumpSingleJson: true,
-      noPlaylist: true,
-      preferFreeFormats: true,
+    // 1️⃣ Search YouTube
+    const video = await YouTube.searchOne(query);
+    if (!video) throw new Error("No video found");
+
+    console.log("Downloading:", video.title, video.url);
+
+    // 2️⃣ Stream & convert audio
+    await new Promise((resolve, reject) => {
+      ffmpeg(ytdl(video.url, { filter: "audioonly", quality: "highestaudio" }))
+        .setFfmpegPath(ffmpegPath)
+        .audioBitrate(128)
+        .toFormat("m4a")
+        .save(filePath)
+        .on("end", resolve)
+        .on("error", reject);
     });
 
-    const videoInfo = Array.isArray(info) ? info[0] : info;
-    if (!videoInfo || !videoInfo.webpage_url) throw new Error("No video found");
+    console.log("Download complete:", filePath);
 
-    console.log("Downloading:", videoInfo.title, videoInfo.webpage_url);
-
-    // 3️⃣ Download audio
-    await ytdlp(videoInfo.webpage_url, {
-      extractAudio: true,
-      audioFormat: "m4a",
-      format: "bestaudio[ext=m4a]/bestaudio",
-      output: filePath,
-      ffmpegLocation: ffmpegPath,
-      noPlaylist: true,
-    });
-
-    if (!fs.existsSync(filePath)) throw new Error("File not created");
-
-    // 4️⃣ Send file
+    // 3️⃣ Send file
     await callSendAPI(sender_psid, {
       attachment: { type: "audio", payload: { is_reusable: true } },
       filedata: filePath,
     });
 
-    // 5️⃣ Cleanup
+    // 4️⃣ Cleanup
     setTimeout(() => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }, 15000);

@@ -12,6 +12,7 @@ const testCommand = require("./funcs/test.js");
 const mistralCommand = require("./funcs/mistral.js");
 const songCommand = require("./funcs/song.js");
 const tiktokCommand = require("./funcs/tiktok.js");
+const lyricsCommand = require("./funcs/lyrics.js");
 
 const app = express().use(express.json());
 
@@ -100,6 +101,24 @@ async function handleMessage(psid, text) {
   return mistralCommand(psid, callSendAPI, text);
 }
 
+if (input.startsWith("/lyrics")) {
+    // Splits by space, removes the "/song" part, and joins the rest as the song title
+    const query = text.split(" ").slice(1).join(" ");
+
+    if (!query) {
+      return callSendAPI(psid, {
+        text: "Please provide a song name. Example: /lyrics edamame",
+      });
+    }
+
+    // Calls the required songCommand from ./funcs/song.js
+    return lyricsCommand(psid, callSendAPI, query);
+  }
+
+  // 3. Fallback (If no command matches, use AI)
+  return mistralCommand(psid, callSendAPI, text);
+}
+
 // 4. API Helpers
 async function sendAction(psid, action) {
   return fbApi.post("", {
@@ -152,3 +171,4 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+

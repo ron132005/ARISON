@@ -58,29 +58,12 @@ app.post("/webhook", (req, res) => {
             return ownerCommand(webhook_event.sender.id, callSendAPI);
           case "MCU_PAYLOAD":
             return mcuCommand(webhook_event.sender.id, callSendAPI);
-          case "TEST_PAYLOAD":
-            return testCommand(webhook_event.sender.id, callSendAPI);
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
         handleMessage(webhook_event.sender.id, webhook_event.message.text);
-      }
-
-      // Postback (if you add buttons in future)
-      if (webhook_event?.postback?.payload) {
-        const payload = webhook_event.postback.payload;
-        switch (payload) {
-          case "HELP_PAYLOAD":
-            return helpCommand(webhook_event.sender.id, callSendAPI);
-          case "OWNER_PAYLOAD":
-            return ownerCommand(webhook_event.sender.id, callSendAPI);
-          case "MCU_PAYLOAD":
-            return mcuCommand(webhook_event.sender.id, callSendAPI);
-          case "TEST_PAYLOAD":
-            return testCommand(webhook_event.sender.id, callSendAPI);
-        }
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -99,12 +82,11 @@ async function handleMessage(psid, text) {
   // --- /menu Quick Replies ---
   if (input === "/menu") {
     return callSendAPI(psid, {
-      text: "Choose an option from below:",
+      text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
       quick_replies: [
         { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
-        { content_type: "text", title: "Owner", payload: "OWNER_PAYLOAD" },
-        { content_type: "text", title: "MCU", payload: "MCU_PAYLOAD" },
-        { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" },
+        { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
+        { content_type: "text", title: "MCU Countown", payload: "MCU_PAYLOAD" },
       ],
     });
   }
@@ -173,3 +155,4 @@ async function callSendAPI(psid, response) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+

@@ -15,6 +15,8 @@ const messages = [
 const dirPath = path.join(__dirname, "..", "temp", "song");
 if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
+const cookiesPath = path.join(__dirname, "..", "cookies.txt");
+
 module.exports = async (sender_psid, callSendAPI, messageText) => {
   const query = messageText.replace(/^\/?song\s+/i, "").trim();
 
@@ -35,6 +37,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     const info = await ytdlp(`ytsearch1:${query}`, {
       dumpSingleJson: true,
       noPlaylist: true,
+      cookies: cookiesPath,
     });
 
     if (!info || !info.webpage_url) {
@@ -43,7 +46,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     const title = info.title || "Unknown Title";
 
-    // 2️⃣ Download best audio under 25MB limit
+    // 2️⃣ Download best audio under Messenger limit
     await ytdlp(info.webpage_url, {
       extractAudio: true,
       audioFormat: "m4a",
@@ -51,33 +54,33 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
       output: filePath,
       ffmpegLocation: ffmpegPath,
       noPlaylist: true,
+      cookies: cookiesPath,
       quiet: true,
     });
 
-    // 3️⃣ Ensure file exists
     if (!fs.existsSync(filePath)) {
-      throw new Error("File download failed");
+      throw new Error("Download failed");
     }
 
     const stats = fs.statSync(filePath);
 
-    // Messenger limit check (25MB)
+    // Messenger 25MB limit
     if (stats.size > 25 * 1024 * 1024) {
-      throw new Error("File exceeds Messenger size limit");
+      throw new Error("File exceeds 25MB limit");
     }
 
-    // 4️⃣ Send title first
+    // 3️⃣ Send title
     await callSendAPI(sender_psid, {
       text: `🎵 Now Playing:\n${title}`,
     });
 
-    // 5️⃣ Send audio file
+    // 4️⃣ Send audio
     await callSendAPI(sender_psid, {
       attachment: { type: "audio", payload: {} },
       filedata: filePath,
     });
 
-    // 6️⃣ Cleanup
+    // 5️⃣ Cleanup
     setTimeout(() => {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }, 15000);
@@ -87,7 +90,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     await callSendAPI(sender_psid, {
       text:
-        "❌ Error: Unable to fetch the song. It may be unavailable or too large.",
+        "❌ Error: Unable to fetch the song. It may be unavailable or blocked by YouTube.",
     });
 
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);

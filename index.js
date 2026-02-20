@@ -15,13 +15,14 @@ const mcuCommand = require("./funcs/mcu.js");
 
 const app = express().use(express.json());
 
-// --- TOKENS ---
-const PAGE_ACCESS_TOKEN = "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
+// --- TOKENS (HARDCODED) ---
+const PAGE_ACCESS_TOKEN =
+  "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
 const VERIFY_TOKEN = "getroned";
 
 // Pre-configure axios
 const fbApi = axios.create({
-  baseURL: "https://graph.facebook.com/v25.0/me/messages",
+  baseURL: "https://graph.facebook.com/v12.0/me/messages",
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
@@ -45,34 +46,25 @@ app.post("/webhook", (req, res) => {
   if (body.object === "page") {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
-      const message_id = webhook_event?.message?.mid;
 
       // Quick Reply handler
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
         switch (payload) {
           case "HELP_PAYLOAD":
-            return helpCommand(webhook_event.sender.id, (resp) =>
-              callSendAPI(webhook_event.sender.id, resp, message_id)
-            );
+            return helpCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "OWNER_PAYLOAD":
-            return ownerCommand(webhook_event.sender.id, (resp) =>
-              callSendAPI(webhook_event.sender.id, resp, message_id)
-            );
+            return ownerCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "MCU_PAYLOAD":
-            return mcuCommand(webhook_event.sender.id, (resp) =>
-              callSendAPI(webhook_event.sender.id, resp, message_id)
-            );
+            return mcuCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
           case "TEST_PAYLOAD":
-            return testCommand(webhook_event.sender.id, (resp) =>
-              callSendAPI(webhook_event.sender.id, resp, message_id)
-            );
+            return testCommand(webhook_event.sender.id, callSendAPI, webhook_event.message.mid);
         }
       }
 
       // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(webhook_event.sender.id, webhook_event.message.text, message_id);
+        handleMessage(webhook_event.sender.id, webhook_event.message.text, webhook_event.message.mid);
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -81,7 +73,7 @@ app.post("/webhook", (req, res) => {
 });
 
 // --- Logic Router ---
-async function handleMessage(psid, text, message_id) {
+async function handleMessage(psid, text, messageID) {
   await Promise.all([sendAction(psid, "mark_seen"), sendAction(psid, "typing_on")]).catch(
     (err) => console.error("Action Error:", err.message)
   );
@@ -98,51 +90,40 @@ async function handleMessage(psid, text, message_id) {
           { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
           { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
           { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
-          { content_type: "text", title: "Test", payload: "TEST_PAYLOAD" },
+          { content_type: "text", title: "Test Command", payload: "TEST_PAYLOAD" },
         ],
       },
-      message_id
+      messageID
     );
   }
 
   // --- Exact Matches ---
-  if (input === "/help") return helpCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
-  if (input === "/test") return testCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
-  if (input === "/owner") return ownerCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
-  if (input === "/mcu") return mcuCommand(psid, (resp) => callSendAPI(psid, resp, message_id));
-  if (input === "hi" || input === "hello")
-    return callSendAPI(psid, { text: "Hello!" }, message_id);
+  if (input === "/help") return helpCommand(psid, callSendAPI, messageID);
+  if (input === "/test") return testCommand(psid, callSendAPI, messageID);
+  if (input === "/owner") return ownerCommand(psid, callSendAPI, messageID);
+  if (input === "/mcu") return mcuCommand(psid, callSendAPI, messageID);
+  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, messageID);
 
   // --- Commands with arguments ---
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /song edamame" },
-        message_id
-      );
-    return songCommand(psid, (resp) => callSendAPI(psid, resp, message_id), query);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, messageID);
+    return songCommand(psid, callSendAPI, query, messageID);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /lyrics edamame" },
-        message_id
-      );
-    return lyricsCommand(psid, (resp) => callSendAPI(psid, resp, message_id), query);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, messageID);
+    return lyricsCommand(psid, callSendAPI, query, messageID);
   }
 
   // --- TikTok (disabled example) ---
   if (input.includes("tiktok.comDISABLED")) {
-    return tiktokCommand(psid, (resp) => callSendAPI(psid, resp, message_id), text);
+    return tiktokCommand(psid, callSendAPI, text, messageID);
   }
 
   // --- Fallback AI ---
-  return mistralCommand(psid, (resp) => callSendAPI(psid, resp, message_id), text);
+  return mistralCommand(psid, callSendAPI, text, messageID);
 }
 
 // --- API Helpers ---
@@ -150,37 +131,29 @@ async function sendAction(psid, action) {
   return fbApi.post("", { recipient: { id: psid }, sender_action: action });
 }
 
-async function callSendAPI(psid, response, reply_to_mid = null) {
+async function callSendAPI(psid, response, messageID = null) {
   try {
-    const payload = {
-      recipient: { id: psid },
-      messaging_type: "RESPONSE",
-      message: response,
-    };
-
-    if (reply_to_mid) {
-      payload.message.reply_to = { mid: reply_to_mid };
-    }
-
-    // Send local file if present
     if (response.filedata) {
       const form = new FormData();
       form.append("recipient", JSON.stringify({ id: psid }));
       form.append(
         "message",
-        JSON.stringify({
-          attachment: { type: response.attachment.type, payload: {} },
-        })
+        JSON.stringify({ attachment: { type: response.attachment.type, payload: {} } })
       );
       form.append("filedata", fs.createReadStream(response.filedata));
 
       await axios.post(
-        `https://graph.facebook.com/v25.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+        `https://graph.facebook.com/v12.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
         form,
         { headers: form.getHeaders() }
       );
     } else {
-      await fbApi.post("", payload);
+      await fbApi.post("", {
+        recipient: { id: psid },
+        message: response,
+        messaging_type: "RESPONSE",          // Official reply type
+        reply_to_message_id: messageID || undefined, // Reply to triggering message
+      });
     }
   } catch (err) {
     console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
@@ -189,4 +162,3 @@ async function callSendAPI(psid, response, reply_to_mid = null) {
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
-

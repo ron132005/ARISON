@@ -60,7 +60,10 @@ app.post("/webhook", (req, res) => {
           case "MCU_PAYLOAD":
             return mcuCommand(webhook_event.sender.id, callSendAPI);
           case "SONG_PAYLOAD":
-            return songCommand(webhook_event.sender.id, callSendAPI);
+    // Prompt user for song name instead of calling songCommand without query
+            return callSendAPI(webhook_event.sender.id, {
+        text: "🎵 Please type the song name. Example: /song Manchild"
+    });
         }
       }
 
@@ -161,5 +164,6 @@ app.get("/health", (req, res) => {
 });
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 

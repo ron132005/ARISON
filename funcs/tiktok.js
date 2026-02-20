@@ -25,7 +25,6 @@ module.exports = async function (psid, callSendAPI, text) {
     }
 
     const videoUrl = data.video[0]; // ✅ FIXED
-    const caption = data.title || "TikTok Video";
 
     const response = await axios({
       method: "get",
@@ -52,13 +51,11 @@ module.exports = async function (psid, callSendAPI, text) {
 
     const stats = fs.statSync(filePath);
 
-    // Messenger 25MB limit
-    if (stats.size > 25 * 1024 * 1024) {
+    // Messenger 45MB limit
+    if (stats.size > 45 * 1024 * 1024) {
       fs.unlinkSync(filePath);
       throw new Error("Video exceeds 25MB Messenger limit");
     }
-
-    await callSendAPI(psid, { text: `🎬 ${caption}` });
 
     await callSendAPI(psid, {
       attachment: {
@@ -85,4 +82,5 @@ module.exports = async function (psid, callSendAPI, text) {
     });
   }
 };
+
 

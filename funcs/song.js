@@ -77,7 +77,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     // 📄 Send Info
     await callSendAPI(sender_psid, {
       text:
-        `🎧 𝗦𝗣𝗢𝗧𝗜𝗙𝗬 𝗦𝗧𝗬𝗟𝗘\n\n` +
+        `🎧 𝑨.𝑹.𝑰.𝑺.𝑶.𝑵 𝑺𝑷𝑬𝑨𝑲𝑬𝑹𝑺\n\n` +
         `🎵 Title: ${title}\n` +
         `🎤 Artist: ${artist}\n` +
         `🕒 Duration: ${minutes}:${seconds}`,
@@ -108,3 +108,4 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     });
   }
 };
+

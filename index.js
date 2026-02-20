@@ -27,6 +27,35 @@ const fbApi = axios.create({
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
+async function sendVideoWithCaption(psid, filePath, caption) {
+  // 1️⃣ Upload the video to Messenger
+  const form = new FormData();
+  form.append("recipient", JSON.stringify({ id: psid }));
+  form.append(
+    "message",
+    JSON.stringify({ attachment: { type: "video", payload: { is_reusable: true } } })
+  );
+  form.append("filedata", fs.createReadStream(filePath));
+
+  const uploadRes = await axios.post(
+    `https://graph.facebook.com/v17.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    form,
+    { headers: form.getHeaders() }
+  );
+
+  const attachmentId = uploadRes.data.attachment_id;
+  if (!attachmentId) throw new Error("Failed to get attachment_id");
+
+  // 2️⃣ Send caption + video together
+  await fbApi.post("", {
+    recipient: { id: psid },
+    message: {
+      text: caption,
+      attachment: { type: "video", payload: { attachment_id: attachmentId } },
+    },
+  });
+}
+
 // --- Webhook verification ---
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -164,6 +193,7 @@ app.get("/health", (req, res) => {
 });
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

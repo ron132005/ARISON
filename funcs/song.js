@@ -1,8 +1,6 @@
-
 const ytdlp = require("yt-dlp-exec");
 const fs = require("fs");
 const path = require("path");
-const ffmpegPath = require("ffmpeg-static");
 
 const messages = [
   "🔍 Initiating auditory scan… detecting your track now.",
@@ -13,7 +11,8 @@ const messages = [
   "🔊 Audio ready for deployment…",
 ];
 
-const dirPath = path.join(__dirname, "..", "temp", "song");
+// Safe temp folder in Render
+const dirPath = path.join(process.cwd(), "temp", "song");
 if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
 module.exports = async (sender_psid, callSendAPI, query) => {
@@ -25,7 +24,7 @@ module.exports = async (sender_psid, callSendAPI, query) => {
   const randomMessage = messages[Math.floor(Math.random() * messages.length)];
 
   try {
-    // 1️⃣ Send a "loading" message
+    // 1️⃣ Send status
     await callSendAPI(sender_psid, { text: `⏳ ${randomMessage}` });
 
     // 2️⃣ Fetch video info
@@ -36,31 +35,37 @@ module.exports = async (sender_psid, callSendAPI, query) => {
     });
 
     const videoInfo = Array.isArray(info) ? info[0] : info;
-    if (!videoInfo || !videoInfo.webpage_url) throw new Error("No results found");
+    const videoUrl = videoInfo.webpage_url;
 
-    // 3️⃣ Download audio
-    await ytdlp(videoInfo.webpage_url, {
+    // 3️⃣ Download audio (Render-safe)
+    await ytdlp(videoUrl, {
       extractAudio: true,
       audioFormat: "m4a",
-      format: "bestaudio[ext=m4a]/bestaudio",
       output: filePath,
-      ffmpegLocation: ffmpegPath,
       noPlaylist: true,
+      // ❌ Remove ffmpegLocation entirely to use system ffmpeg
     });
 
-    // 4️⃣ Send audio using your callSendAPI
+    // 4️⃣ Send audio file via your existing callSendAPI
     await callSendAPI(sender_psid, {
-      attachment: { type: "audio" },
+      attachment: { type: "audio", payload: {} },
       filedata: filePath,
     });
 
-    // 5️⃣ Cleanup
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // 5️⃣ Cleanup after sending
+    setTimeout(() => {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }, 10000);
+
   } catch (err) {
     console.error("Song Error:", err);
-    await callSendAPI(sender_psid, {
+    if (err.stderr) console.error("STDERR:", err.stderr);
+    if (err.stdout) console.error("STDOUT:", err.stdout);
+
+    callSendAPI(sender_psid, {
       text: "❌ Error: Unable to fetch the song. Please try a different name.",
     });
+
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 };

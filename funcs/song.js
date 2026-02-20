@@ -12,7 +12,7 @@ const messages = [
 ];
 
 // Safe temp folder in Render
-const dirPath = path.join(process.cwd(), "temp", "song");
+const dirPath = path.join("/tmp", "song");
 if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
 module.exports = async (sender_psid, callSendAPI, query) => {
@@ -69,3 +69,4 @@ module.exports = async (sender_psid, callSendAPI, query) => {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
   }
 };
+

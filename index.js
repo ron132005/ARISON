@@ -26,46 +26,35 @@ const fbApi = axios.create({
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
-// --- Messenger Profile Configuration (Get Started & Persistent Menu) ---
+// --- Messenger Profile Configuration ---
 async function setMessengerProfile() {
   try {
     await axios.post(
       `https://graph.facebook.com/v23.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
       {
+        // Keeps the Get Started button
         get_started: {
           payload: "GET_STARTED_PAYLOAD"
         },
-        persistent_menu: [
+        // Keeps the slash commands menu (populates text box on click)
+        commands: [
           {
             locale: "default",
-            composer_input_disabled: false,
-            call_to_actions: [
-              {
-                type: "postback",
-                title: "/song",
-                payload: "SONG_PAYLOAD",
-              },
-              {
-                type: "postback",
-                title: "🎬 MCU Countdown",
-                payload: "MCU_PAYLOAD",
-              },
-              {
-                type: "postback",
-                title: "📜 Help Menu",
-                payload: "HELP_PAYLOAD",
-              },
-              {
-                type: "postback",
-                title: "👤 View Owner",
-                payload: "OWNER_PAYLOAD",
-              },
-            ],
-          },
+            commands: [
+              { name: "help", description: "Show all available commands" },
+              { name: "song", description: "Download a song. usage: /song [name]" },
+              { name: "lyrics", description: "Get song lyrics. usage: /lyrics [name]" },
+              { name: "owner", description: "Contact the bot developer" },
+              { name: "mcu", description: "MCU movie countdown" },
+              { name: "test", description: "Test bot connection" }
+            ]
+          }
         ],
+        // Persistent Menu has been removed
+        persistent_menu: []
       }
     );
-    console.log("✅ Messenger Profile (Get Started & Menu) updated");
+    console.log("✅ Messenger Profile updated (Persistent Menu removed)");
   } catch (err) {
     console.error("❌ Profile Error:", err.response?.data || err.message);
   }
@@ -93,35 +82,28 @@ app.post("/webhook", (req, res) => {
   if (body.object === "page") {
     body.entry.forEach((entry) => {
       const webhook_event = entry.messaging?.[0];
-
       if (!webhook_event) return;
 
       const senderId = webhook_event.sender?.id;
       const messageMid = webhook_event.message?.mid;
 
-      // --- Postbacks (Get Started & Menu) ---
+      // Handle Postbacks (Get Started)
       if (webhook_event.postback) {
         handlePayload(senderId, webhook_event.postback.payload, messageMid);
       }
 
-      // --- Quick Replies ---
+      // Handle Quick Replies
       if (webhook_event?.message?.quick_reply?.payload) {
         handlePayload(senderId, webhook_event.message.quick_reply.payload, messageMid);
       }
 
-      // --- Normal text messages ---
+      // Normal text messages
       if (webhook_event?.message?.text) {
-        handleMessage(
-          senderId,
-          webhook_event.message.text,
-          messageMid
-        );
+        handleMessage(senderId, webhook_event.message.text, messageMid);
       }
     });
-
     return res.status(200).send("EVENT_RECEIVED");
   }
-
   res.sendStatus(404);
 });
 
@@ -129,29 +111,15 @@ app.post("/webhook", (req, res) => {
 function handlePayload(senderId, payload, messageMid) {
   switch (payload) {
     case "GET_STARTED_PAYLOAD":
-      return callSendAPI(senderId, { text: "Welcome! 👋 Type /help to see my commands or use the menu below." }, messageMid);
-
+      return callSendAPI(senderId, { text: "Welcome! 👋 Type / to see my commands." }, messageMid);
     case "HELP_PAYLOAD":
-      return helpCommand(senderId, (psid, msg) =>
-        callSendAPI(psid, msg, messageMid)
-      );
-
+      return helpCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
     case "OWNER_PAYLOAD":
-      return ownerCommand(senderId, (psid, msg) =>
-        callSendAPI(psid, msg, messageMid)
-      );
-
+      return ownerCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
     case "MCU_PAYLOAD":
-      return mcuCommand(senderId, (psid, msg) =>
-        callSendAPI(psid, msg, messageMid)
-      );
-
+      return mcuCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
     case "SONG_PAYLOAD":
-      return callSendAPI(
-        senderId,
-        { text: "🎵 Please type the song name. Example: /song Manchild" },
-        messageMid
-      );
+      return callSendAPI(senderId, { text: "🎵 Please type the song name. Example: /song Manchild" }, messageMid);
   }
 }
 
@@ -160,38 +128,32 @@ async function handleMessage(psid, text, mid) {
   await Promise.all([
     sendAction(psid, "mark_seen"),
     sendAction(psid, "typing_on"),
-  ]).catch((err) =>
-    console.error("Action Error:", err.message)
-  );
+  ]).catch((err) => console.error("Action Error:", err.message));
 
   const input = text.toLowerCase().trim();
 
   if (input === "/menu") {
-    return callSendAPI(
-      psid,
-      {
-        text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
+    return callSendAPI(psid, {
+        text: "Pick an option:",
         quick_replies: [
           { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
           { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
           { content_type: "text", title: "MCU COUNTDOWN", payload: "MCU_PAYLOAD" },
           { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
         ],
-      },
-      mid
-    );
+      }, mid);
   }
 
-  if (input === "/help")
+  if (input === "/help" || input === "help")
     return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
 
-  if (input === "/test")
+  if (input === "/test" || input === "test")
     return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
 
-  if (input === "/owner")
+  if (input === "/owner" || input === "owner")
     return ownerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
 
-  if (input === "/mcu")
+  if (input === "/mcu" || input === "mcu")
     return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
 
   if (input === "hi" || input === "hello")
@@ -199,23 +161,13 @@ async function handleMessage(psid, text, mid) {
 
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /song edamame" },
-        mid
-      );
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, mid);
     return songCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query)
-      return callSendAPI(
-        psid,
-        { text: "Please provide a song name. Example: /lyrics edamame" },
-        mid
-      );
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, mid);
     return lyricsCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
   }
 
@@ -227,10 +179,7 @@ async function handleMessage(psid, text, mid) {
 
 // --- API Helpers ---
 async function sendAction(psid, action) {
-  return fbApi.post("", {
-    recipient: { id: psid },
-    sender_action: action,
-  });
+  return fbApi.post("", { recipient: { id: psid }, sender_action: action });
 }
 
 async function callSendAPI(psid, response, replyMid = null) {
@@ -238,26 +187,11 @@ async function callSendAPI(psid, response, replyMid = null) {
     if (response.filedata) {
       const form = new FormData();
       form.append("recipient", JSON.stringify({ id: psid }));
-      form.append(
-        "message",
-        JSON.stringify({
-          attachment: { type: response.attachment.type, payload: {} },
-        })
-      );
+      form.append("message", JSON.stringify({ attachment: { type: response.attachment.type, payload: {} } }));
       form.append("messaging_type", "RESPONSE");
-
-      if (replyMid) {
-        form.append("reply_to", JSON.stringify({ mid: replyMid }));
-      }
-
+      if (replyMid) form.append("reply_to", JSON.stringify({ mid: replyMid }));
       form.append("filedata", fs.createReadStream(response.filedata));
-
-      await axios.post(
-        "https://graph.facebook.com/v23.0/me/messages?access_token=" +
-          PAGE_ACCESS_TOKEN,
-        form,
-        { headers: form.getHeaders() }
-      );
+      await axios.post("https://graph.facebook.com/v23.0/me/messages?access_token=" + PAGE_ACCESS_TOKEN, form, { headers: form.getHeaders() });
     } else {
       await fbApi.post("", {
         recipient: { id: psid },
@@ -267,16 +201,11 @@ async function callSendAPI(psid, response, replyMid = null) {
       });
     }
   } catch (err) {
-    console.error(
-      "Send Error:",
-      JSON.stringify(err.response?.data, null, 2) || err.message
-    );
+    console.error("Send Error:", JSON.stringify(err.response?.data, null, 2) || err.message);
   }
 }
 
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
+app.get("/health", (req, res) => { res.status(200).json({ status: "ok" }); });
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => {

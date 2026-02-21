@@ -26,6 +26,48 @@ const fbApi = axios.create({
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
+// --- Persistent Menu Configuration ---
+async function setPersistentMenu() {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v23.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        persistent_menu: [
+          {
+            locale: "default",
+            composer_input_disabled: false,
+            call_to_actions: [
+              {
+                type: "postback",
+                title: "/song",
+                payload: "SONG_PAYLOAD",
+              },
+              {
+                type: "postback",
+                title: "🎬 MCU Countdown",
+                payload: "MCU_PAYLOAD",
+              },
+              {
+                type: "postback",
+                title: "📜 Help Menu",
+                payload: "HELP_PAYLOAD",
+              },
+              {
+                type: "postback",
+                title: "👤 View Owner",
+                payload: "OWNER_PAYLOAD",
+              },
+            ],
+          },
+        ],
+      }
+    );
+    console.log("✅ Persistent Menu set successfully");
+  } catch (err) {
+    console.error("❌ Error setting Persistent Menu:", err.response?.data || err.message);
+  }
+}
+
 // --- Webhook verification ---
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -54,33 +96,16 @@ app.post("/webhook", (req, res) => {
       const senderId = webhook_event.sender?.id;
       const messageMid = webhook_event.message?.mid;
 
+      // --- Postbacks (Used by Persistent Menu) ---
+      if (webhook_event.postback) {
+        const payload = webhook_event.postback.payload;
+        handlePayload(senderId, payload, messageMid);
+      }
+
       // --- Quick Replies ---
       if (webhook_event?.message?.quick_reply?.payload) {
         const payload = webhook_event.message.quick_reply.payload;
-
-        switch (payload) {
-          case "HELP_PAYLOAD":
-            return helpCommand(senderId, (psid, msg) =>
-              callSendAPI(psid, msg, messageMid)
-            );
-
-          case "OWNER_PAYLOAD":
-            return ownerCommand(senderId, (psid, msg) =>
-              callSendAPI(psid, msg, messageMid)
-            );
-
-          case "MCU_PAYLOAD":
-            return mcuCommand(senderId, (psid, msg) =>
-              callSendAPI(psid, msg, messageMid)
-            );
-
-          case "SONG_PAYLOAD":
-            return callSendAPI(
-              senderId,
-              { text: "🎵 Please type the song name. Example: /song Manchild" },
-              messageMid
-            );
-        }
+        handlePayload(senderId, payload, messageMid);
       }
 
       // --- Normal text messages ---
@@ -98,6 +123,33 @@ app.post("/webhook", (req, res) => {
 
   res.sendStatus(404);
 });
+
+// Separate function to handle both Quick Replies and Persistent Menu Postbacks
+function handlePayload(senderId, payload, messageMid) {
+  switch (payload) {
+    case "HELP_PAYLOAD":
+      return helpCommand(senderId, (psid, msg) =>
+        callSendAPI(psid, msg, messageMid)
+      );
+
+    case "OWNER_PAYLOAD":
+      return ownerCommand(senderId, (psid, msg) =>
+        callSendAPI(psid, msg, messageMid)
+      );
+
+    case "MCU_PAYLOAD":
+      return mcuCommand(senderId, (psid, msg) =>
+        callSendAPI(psid, msg, messageMid)
+      );
+
+    case "SONG_PAYLOAD":
+      return callSendAPI(
+        senderId,
+        { text: "🎵 Please type the song name. Example: /song Manchild" },
+        messageMid
+      );
+  }
+}
 
 // --- Logic Router ---
 async function handleMessage(psid, text, mid) {
@@ -223,6 +275,8 @@ app.get("/health", (req, res) => {
 });
 
 const PORT = process.env.PORT || 1337;
-app.listen(PORT, () =>
-  console.log(`🚀 Webhook live on ${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 Webhook live on ${PORT}`);
+  // Set the menu when the server starts
+  setPersistentMenu();
+});

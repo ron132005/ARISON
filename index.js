@@ -90,10 +90,10 @@ async function handleMessage(psid, text) {
     return callSendAPI(psid, {
       text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
       quick_replies: [
-        { content_type: "text", title: "Help", payload: "HELP_PAYLOAD" },
-        { content_type: "text", title: "Owner Details", payload: "OWNER_PAYLOAD" },
-        { content_type: "text", title: "MCU Countdown", payload: "MCU_PAYLOAD" },
-        { content_type: "text", title: "Song", payload: "SONG_PAYLOAD" },
+        { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
+        { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
+        { content_type: "text", title: "MCU COUNTDOWN", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
       ],
     });
   }
@@ -164,6 +164,7 @@ app.get("/health", (req, res) => {
 });
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => console.log(`🚀 Webhook live on ${PORT}`));
+
 
 
 

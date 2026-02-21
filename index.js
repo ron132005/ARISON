@@ -3,66 +3,94 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 
+/** * IMPORTANT: Ensure these files exist in a folder named 'funcs' relative to this script. */
+const helpCommand = require("./funcs/help.js");
+const testCommand = require("./funcs/test.js");
+const mistralCommand = require("./funcs/mistral.js");
+const songCommand = require("./funcs/song.js");
+const tiktokCommand = require("./funcs/tiktok.js");
+const lyricsCommand = require("./funcs/lyrics.js");
+const ownerCommand = require("./funcs/owner.js");
+const mcuCommand = require("./funcs/mcu.js");
+
 const app = express().use(express.json());
 
-// =============================
-// 🔐 HARDCODED TOKENS
-// =============================
+// --- TOKENS ---
 const PAGE_ACCESS_TOKEN =
   "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
-
 const VERIFY_TOKEN = "getroned";
 
-// =============================
-// 📡 AXIOS INSTANCE (v23.0)
-// =============================
+// Updated to v23.0
 const fbApi = axios.create({
   baseURL: "https://graph.facebook.com/v23.0/me/messages",
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
-// =============================
-// 🔎 WEBHOOK VERIFICATION
-// =============================
+// --- Webhook verification ---
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ WEBHOOK VERIFIED");
+    console.log("WEBHOOK_VERIFIED");
+    res.set("Content-Type", "text/plain");
     return res.status(200).send(challenge);
   }
 
   res.sendStatus(403);
 });
 
-// =============================
-// 📥 WEBHOOK EVENT RECEIVER
-// =============================
+// --- Webhook message handler ---
 app.post("/webhook", (req, res) => {
-  const body = req.body;
+  const { body } = req;
 
   if (body.object === "page") {
     body.entry.forEach((entry) => {
-      entry.messaging.forEach((event) => {
-        const senderId = event.sender.id;
-        const message = event.message;
+      const webhook_event = entry.messaging?.[0];
 
-        if (!message) return;
+      if (!webhook_event) return;
 
-        const mid = message.mid; // 🔥 MESSAGE ID FOR REPLY
+      const senderId = webhook_event.sender?.id;
+      const messageMid = webhook_event.message?.mid;
 
-        // Quick Replies
-        if (message.quick_reply?.payload) {
-          return handleQuickReply(senderId, message.quick_reply.payload, mid);
+      // --- Quick Replies ---
+      if (webhook_event?.message?.quick_reply?.payload) {
+        const payload = webhook_event.message.quick_reply.payload;
+
+        switch (payload) {
+          case "HELP_PAYLOAD":
+            return helpCommand(senderId, (psid, msg) =>
+              callSendAPI(psid, msg, messageMid)
+            );
+
+          case "OWNER_PAYLOAD":
+            return ownerCommand(senderId, (psid, msg) =>
+              callSendAPI(psid, msg, messageMid)
+            );
+
+          case "MCU_PAYLOAD":
+            return mcuCommand(senderId, (psid, msg) =>
+              callSendAPI(psid, msg, messageMid)
+            );
+
+          case "SONG_PAYLOAD":
+            return callSendAPI(
+              senderId,
+              { text: "🎵 Please type the song name. Example: /song Manchild" },
+              messageMid
+            );
         }
+      }
 
-        // Normal Text
-        if (message.text) {
-          return handleMessage(senderId, message.text, mid);
-        }
-      });
+      // --- Normal text messages ---
+      if (webhook_event?.message?.text) {
+        handleMessage(
+          senderId,
+          webhook_event.message.text,
+          messageMid
+        );
+      }
     });
 
     return res.status(200).send("EVENT_RECEIVED");
@@ -71,129 +99,130 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(404);
 });
 
-// =============================
-// 🧠 MESSAGE HANDLER
-// =============================
+// --- Logic Router ---
 async function handleMessage(psid, text, mid) {
-  await sendAction(psid, "mark_seen");
-  await sendAction(psid, "typing_on");
+  await Promise.all([
+    sendAction(psid, "mark_seen"),
+    sendAction(psid, "typing_on"),
+  ]).catch((err) =>
+    console.error("Action Error:", err.message)
+  );
 
   const input = text.toLowerCase().trim();
-
-  if (input === "hi" || input === "hello") {
-    return callSendAPI(psid, { text: "Hello there 👋" }, mid);
-  }
 
   if (input === "/menu") {
     return callSendAPI(
       psid,
       {
-        text: "Choose an option below:",
+        text: "Here’s a selection of things I can help you with. Pick an option from the list below:",
         quick_replies: [
-          { content_type: "text", title: "Help", payload: "HELP" },
-          { content_type: "text", title: "Owner", payload: "OWNER" },
+          { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
+          { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
+          { content_type: "text", title: "MCU COUNTDOWN", payload: "MCU_PAYLOAD" },
+          { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
         ],
       },
       mid
     );
   }
 
-  if (input === "/help") {
-    return callSendAPI(psid, { text: "Type /menu to see commands." }, mid);
+  if (input === "/help")
+    return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+
+  if (input === "/test")
+    return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+
+  if (input === "/owner")
+    return ownerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+
+  if (input === "/mcu")
+    return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+
+  if (input === "hi" || input === "hello")
+    return callSendAPI(psid, { text: "Hello!" }, mid);
+
+  if (input.startsWith("/song")) {
+    const query = text.split(" ").slice(1).join(" ");
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /song edamame" },
+        mid
+      );
+    return songCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
   }
 
-  return callSendAPI(psid, { text: "I received: " + text }, mid);
+  if (input.startsWith("/lyrics")) {
+    const query = text.split(" ").slice(1).join(" ");
+    if (!query)
+      return callSendAPI(
+        psid,
+        { text: "Please provide a song name. Example: /lyrics edamame" },
+        mid
+      );
+    return lyricsCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
+  }
+
+  if (input.includes("tiktok.com"))
+    return tiktokCommand(psid, (id, msg) => callSendAPI(id, msg, mid), text);
+
+  return mistralCommand(psid, (id, msg) => callSendAPI(id, msg, mid), text);
 }
 
-// =============================
-// ⚡ QUICK REPLY HANDLER
-// =============================
-async function handleQuickReply(psid, payload, mid) {
-  if (payload === "HELP") {
-    return callSendAPI(psid, { text: "This is the help section." }, mid);
-  }
-
-  if (payload === "OWNER") {
-    return callSendAPI(psid, { text: "Bot created by you 😎" }, mid);
-  }
+// --- API Helpers ---
+async function sendAction(psid, action) {
+  return fbApi.post("", {
+    recipient: { id: psid },
+    sender_action: action,
+  });
 }
 
-// =============================
-// 📤 SEND API WITH REPLY SUPPORT
-// =============================
 async function callSendAPI(psid, response, replyMid = null) {
   try {
-    // If sending local file
     if (response.filedata) {
       const form = new FormData();
-
       form.append("recipient", JSON.stringify({ id: psid }));
-
       form.append(
         "message",
         JSON.stringify({
-          attachment: {
-            type: response.attachment.type,
-            payload: {},
-          },
+          attachment: { type: response.attachment.type, payload: {} },
         })
       );
+      form.append("messaging_type", "RESPONSE");
 
       if (replyMid) {
         form.append("reply_to", JSON.stringify({ mid: replyMid }));
-        form.append("messaging_type", "RESPONSE");
       }
 
       form.append("filedata", fs.createReadStream(response.filedata));
 
       await axios.post(
-        `https://graph.facebook.com/v23.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+        "https://graph.facebook.com/v23.0/me/messages?access_token=" +
+          PAGE_ACCESS_TOKEN,
         form,
         { headers: form.getHeaders() }
       );
-
-      return;
+    } else {
+      await fbApi.post("", {
+        recipient: { id: psid },
+        messaging_type: "RESPONSE",
+        message: response,
+        ...(replyMid && { reply_to: { mid: replyMid } }),
+      });
     }
-
-    // Normal Text / Template
-    await fbApi.post("", {
-      recipient: { id: psid },
-      messaging_type: "RESPONSE",
-      message: response,
-      ...(replyMid && { reply_to: { mid: replyMid } }),
-    });
-
-  } catch (error) {
+  } catch (err) {
     console.error(
-      "❌ SEND ERROR:",
-      error.response?.data || error.message
+      "Send Error:",
+      JSON.stringify(err.response?.data, null, 2) || err.message
     );
   }
 }
 
-// =============================
-// 👀 SENDER ACTIONS
-// =============================
-async function sendAction(psid, action) {
-  try {
-    await fbApi.post("", {
-      recipient: { id: psid },
-      sender_action: action,
-    });
-  } catch (err) {
-    console.error("Action Error:", err.response?.data || err.message);
-  }
-}
-
-// =============================
-// ❤️ HEALTH CHECK
-// =============================
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// =============================
-// 🚀 START SERVER
-// =============================
 const PORT = process.env.PORT || 1337;
-app.listen(PORT, () => console.log(`🚀 Webhook live on port ${PORT}`));
+app.listen(PORT, () =>
+  console.log(`🚀 Webhook live on ${PORT}`)
+);

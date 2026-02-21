@@ -20,41 +20,41 @@ const PAGE_ACCESS_TOKEN =
   "EAAUyQ2YrkywBQ3LHXLip0fTynkXnKg56iDUqm1RRpF5f3hVBPcwi1mksKBhrB5vmZCUVfORjkkDGZCSHCtmMZB0zKoWkBeHyNCBZCj8XCcVDU4VSW1WmE3WsjYGrcJ29E4PZB2goe8wpN05PTTSmIGHcL33VqpSY4upUuXc2ixryrbqEINCUFPFFvfnuibuaiIqOSPAZDZD";
 const VERIFY_TOKEN = "getroned";
 
-// Updated to v23.0
 const fbApi = axios.create({
   baseURL: "https://graph.facebook.com/v23.0/me/messages",
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
-// --- Messenger Profile Configuration ---
+// --- Messenger Profile Configuration (Get Started Button) ---
 async function setMessengerProfile() {
   try {
     await axios.post(
       `https://graph.facebook.com/v23.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
       {
-        // Keeps the Get Started button
         get_started: {
           payload: "GET_STARTED_PAYLOAD"
         },
-        // Keeps the slash commands menu (populates text box on click)
-        commands: [
+        persistent_menu: [
           {
             locale: "default",
-            commands: [
-              { name: "help", description: "Show all available commands" },
-              { name: "song", description: "Download a song. usage: /song [name]" },
-              { name: "lyrics", description: "Get song lyrics. usage: /lyrics [name]" },
-              { name: "owner", description: "Contact the bot developer" },
-              { name: "mcu", description: "MCU movie countdown" },
-              { name: "test", description: "Test bot connection" }
-            ]
-          }
+            composer_input_disabled: false,
+            call_to_actions: [
+              {
+                type: "postback",
+                title: "📜 Help Menu",
+                payload: "HELP_PAYLOAD",
+              },
+              {
+                type: "postback",
+                title: "👤 View Owner",
+                payload: "OWNER_PAYLOAD",
+              },
+            ],
+          },
         ],
-        // Persistent Menu has been removed
-        persistent_menu: []
       }
     );
-    console.log("✅ Messenger Profile updated (Persistent Menu removed)");
+    console.log("✅ Get Started button & Messenger Profile updated");
   } catch (err) {
     console.error("❌ Profile Error:", err.response?.data || err.message);
   }
@@ -71,7 +71,6 @@ app.get("/webhook", (req, res) => {
     res.set("Content-Type", "text/plain");
     return res.status(200).send(challenge);
   }
-
   res.sendStatus(403);
 });
 
@@ -87,17 +86,14 @@ app.post("/webhook", (req, res) => {
       const senderId = webhook_event.sender?.id;
       const messageMid = webhook_event.message?.mid;
 
-      // Handle Postbacks (Get Started)
       if (webhook_event.postback) {
         handlePayload(senderId, webhook_event.postback.payload, messageMid);
       }
 
-      // Handle Quick Replies
       if (webhook_event?.message?.quick_reply?.payload) {
         handlePayload(senderId, webhook_event.message.quick_reply.payload, messageMid);
       }
 
-      // Normal text messages
       if (webhook_event?.message?.text) {
         handleMessage(senderId, webhook_event.message.text, messageMid);
       }
@@ -111,13 +107,21 @@ app.post("/webhook", (req, res) => {
 function handlePayload(senderId, payload, messageMid) {
   switch (payload) {
     case "GET_STARTED_PAYLOAD":
-      return callSendAPI(senderId, { text: "Welcome! 👋 Type / to see my commands." }, messageMid);
+      return callSendAPI(
+        senderId, 
+        { text: "Welcome! 👋 Click the button below to get started or type /help to see what I can do." }, 
+        messageMid
+      );
+
     case "HELP_PAYLOAD":
       return helpCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
+
     case "OWNER_PAYLOAD":
       return ownerCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
+
     case "MCU_PAYLOAD":
       return mcuCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
+
     case "SONG_PAYLOAD":
       return callSendAPI(senderId, { text: "🎵 Please type the song name. Example: /song Manchild" }, messageMid);
   }
@@ -134,45 +138,34 @@ async function handleMessage(psid, text, mid) {
 
   if (input === "/menu") {
     return callSendAPI(psid, {
-        text: "Pick an option:",
-        quick_replies: [
-          { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
-          { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
-          { content_type: "text", title: "MCU COUNTDOWN", payload: "MCU_PAYLOAD" },
-          { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
-        ],
-      }, mid);
+      text: "Pick an option:",
+      quick_replies: [
+        { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
+        { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
+        { content_type: "text", title: "MCU", payload: "MCU_PAYLOAD" },
+      ],
+    }, mid);
   }
 
-  if (input === "/help" || input === "help")
-    return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
-
-  if (input === "/test" || input === "test")
-    return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
-
-  if (input === "/owner" || input === "owner")
-    return ownerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
-
-  if (input === "/mcu" || input === "mcu")
-    return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
-
-  if (input === "hi" || input === "hello")
-    return callSendAPI(psid, { text: "Hello!" }, mid);
+  if (input === "/help") return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (input === "/test") return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (input === "/owner") return ownerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (input === "/mcu") return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, mid);
 
   if (input.startsWith("/song")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /song edamame" }, mid);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name." }, mid);
     return songCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
   }
 
   if (input.startsWith("/lyrics")) {
     const query = text.split(" ").slice(1).join(" ");
-    if (!query) return callSendAPI(psid, { text: "Please provide a song name. Example: /lyrics edamame" }, mid);
+    if (!query) return callSendAPI(psid, { text: "Please provide a song name." }, mid);
     return lyricsCommand(psid, (id, msg) => callSendAPI(id, msg, mid), query);
   }
 
-  if (input.includes("tiktok.com"))
-    return tiktokCommand(psid, (id, msg) => callSendAPI(id, msg, mid), text);
+  if (input.includes("tiktok.com")) return tiktokCommand(psid, (id, msg) => callSendAPI(id, msg, mid), text);
 
   return mistralCommand(psid, (id, msg) => callSendAPI(id, msg, mid), text);
 }
@@ -191,7 +184,8 @@ async function callSendAPI(psid, response, replyMid = null) {
       form.append("messaging_type", "RESPONSE");
       if (replyMid) form.append("reply_to", JSON.stringify({ mid: replyMid }));
       form.append("filedata", fs.createReadStream(response.filedata));
-      await axios.post("https://graph.facebook.com/v23.0/me/messages?access_token=" + PAGE_ACCESS_TOKEN, form, { headers: form.getHeaders() });
+
+      await axios.post(`https://graph.facebook.com/v23.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, form, { headers: form.getHeaders() });
     } else {
       await fbApi.post("", {
         recipient: { id: psid },
@@ -205,7 +199,7 @@ async function callSendAPI(psid, response, replyMid = null) {
   }
 }
 
-app.get("/health", (req, res) => { res.status(200).json({ status: "ok" }); });
+app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => {

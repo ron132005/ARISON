@@ -26,12 +26,15 @@ const fbApi = axios.create({
   params: { access_token: PAGE_ACCESS_TOKEN },
 });
 
-// --- Persistent Menu Configuration ---
-async function setPersistentMenu() {
+// --- Messenger Profile Configuration (Get Started & Persistent Menu) ---
+async function setMessengerProfile() {
   try {
     await axios.post(
       `https://graph.facebook.com/v23.0/me/messenger_profile?access_token=${PAGE_ACCESS_TOKEN}`,
       {
+        get_started: {
+          payload: "GET_STARTED_PAYLOAD"
+        },
         persistent_menu: [
           {
             locale: "default",
@@ -62,9 +65,9 @@ async function setPersistentMenu() {
         ],
       }
     );
-    console.log("✅ Persistent Menu set successfully");
+    console.log("✅ Messenger Profile (Get Started & Menu) updated");
   } catch (err) {
-    console.error("❌ Error setting Persistent Menu:", err.response?.data || err.message);
+    console.error("❌ Profile Error:", err.response?.data || err.message);
   }
 }
 
@@ -96,16 +99,14 @@ app.post("/webhook", (req, res) => {
       const senderId = webhook_event.sender?.id;
       const messageMid = webhook_event.message?.mid;
 
-      // --- Postbacks (Used by Persistent Menu) ---
+      // --- Postbacks (Get Started & Menu) ---
       if (webhook_event.postback) {
-        const payload = webhook_event.postback.payload;
-        handlePayload(senderId, payload, messageMid);
+        handlePayload(senderId, webhook_event.postback.payload, messageMid);
       }
 
       // --- Quick Replies ---
       if (webhook_event?.message?.quick_reply?.payload) {
-        const payload = webhook_event.message.quick_reply.payload;
-        handlePayload(senderId, payload, messageMid);
+        handlePayload(senderId, webhook_event.message.quick_reply.payload, messageMid);
       }
 
       // --- Normal text messages ---
@@ -124,9 +125,12 @@ app.post("/webhook", (req, res) => {
   res.sendStatus(404);
 });
 
-// Separate function to handle both Quick Replies and Persistent Menu Postbacks
+// --- Shared Payload Handler ---
 function handlePayload(senderId, payload, messageMid) {
   switch (payload) {
+    case "GET_STARTED_PAYLOAD":
+      return callSendAPI(senderId, { text: "Welcome! 👋 Type /help to see my commands or use the menu below." }, messageMid);
+
     case "HELP_PAYLOAD":
       return helpCommand(senderId, (psid, msg) =>
         callSendAPI(psid, msg, messageMid)
@@ -277,6 +281,5 @@ app.get("/health", (req, res) => {
 const PORT = process.env.PORT || 1337;
 app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
-  // Set the menu when the server starts
-  setPersistentMenu();
+  setMessengerProfile();
 });

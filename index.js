@@ -34,6 +34,18 @@ async function setMessengerProfile() {
         get_started: {
           payload: "GET_STARTED_PAYLOAD"
         },
+        commands: [
+          {
+            locale: "default",
+            commands: [
+              { name: "/help", description: "Show all available commands" },
+              { name: "/song", description: "Find and download music" },
+              { name: "/mcu", description: "See the next Marvel movie countdown" },
+              { name: "/owner", description: "Information about the developer" },
+              { name: "/menu", description: "Show the interactive quick menu" }
+            ]
+          }
+        ],
         persistent_menu: [
           {
             locale: "default",
@@ -41,7 +53,7 @@ async function setMessengerProfile() {
             call_to_actions: [
               {
                 type: "postback",
-                title: "📜 Help Menu",
+                title: "📜 Help",
                 payload: "HELP_PAYLOAD",
               },
               {
@@ -143,6 +155,7 @@ async function handleMessage(psid, text, mid) {
         { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
         { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
         { content_type: "text", title: "MCU", payload: "MCU_PAYLOAD" },
+        { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" }, 
       ],
     }, mid);
   }
@@ -206,3 +219,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+

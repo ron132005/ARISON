@@ -98,16 +98,19 @@ app.post("/webhook", (req, res) => {
       const senderId = webhook_event.sender?.id;
       const messageMid = webhook_event.message?.mid;
 
+      // 1. Handle Postbacks (from Persistent Menu/Buttons)
       if (webhook_event.postback) {
-        handlePayload(senderId, webhook_event.postback.payload, messageMid);
+        return handlePayload(senderId, webhook_event.postback.payload, messageMid);
       }
 
+      // 2. Handle Quick Replies (Priority over normal text)
       if (webhook_event?.message?.quick_reply?.payload) {
-        handlePayload(senderId, webhook_event.message.quick_reply.payload, messageMid);
+        return handlePayload(senderId, webhook_event.message.quick_reply.payload, messageMid);
       }
 
+      // 3. Handle Normal Text (Only if it's NOT a quick reply)
       if (webhook_event?.message?.text) {
-        handleMessage(senderId, webhook_event.message.text, messageMid);
+        return handleMessage(senderId, webhook_event.message.text, messageMid);
       }
     });
     return res.status(200).send("EVENT_RECEIVED");
@@ -219,4 +222,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 

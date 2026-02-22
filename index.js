@@ -39,10 +39,11 @@ async function setMessengerProfile() {
             locale: "default",
             commands: [
               { name: "/help", description: "Show all available commands" },
-              { name: "/song", description: "Find and download music" },
+              { name: "/developer", description: "Information about the developer" },
+              { name: "/song", description: "Find and send music" },
               { name: "/mcu", description: "See the next Marvel movie countdown" },
-              { name: "/owner", description: "Information about the developer" },
               { name: "/menu", description: "Show the interactive quick menu" }
+              { name: "/lyrics", description: "Find and send song lyrics" },
             ]
           }
         ],
@@ -124,7 +125,7 @@ function handlePayload(senderId, payload, messageMid) {
     case "GET_STARTED_PAYLOAD":
       return callSendAPI(
         senderId, 
-        { text: "Welcome! 👋 Click the button below to get started or type /help to see what I can do." }, 
+        { text: "Welcome! 👋 Click the button below to get started or type /menu to see what I can do." }, 
         messageMid
       );
 
@@ -139,6 +140,9 @@ function handlePayload(senderId, payload, messageMid) {
 
     case "SONG_PAYLOAD":
       return callSendAPI(senderId, { text: "🎵 Please type the song name. Example: /song Manchild" }, messageMid);
+
+    case "LYRICS_PAYLOAD":
+      return callSendAPI(senderId, { text: "🎵 Please type the song name. Example: /lyrics Attention" }, messageMid);
   }
 }
 
@@ -158,7 +162,8 @@ async function handleMessage(psid, text, mid) {
         { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
         { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
         { content_type: "text", title: "MCU", payload: "MCU_PAYLOAD" },
-        { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" }, 
+        { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
+        { content_type: "text", title: "LYRICS", payload: "LYRICS_PAYLOAD" },
       ],
     }, mid);
   }
@@ -222,5 +227,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 

@@ -1,7 +1,16 @@
 const axios = require("axios");
 
+// Helper function: send text in Messenger-safe chunks
+const sendInChunks = async (psid, text, callSendAPI, prefix = "") => {
+  const CHUNK_SIZE = 1900; // safe buffer for Messenger
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    const chunk = text.slice(i, i + CHUNK_SIZE);
+    await callSendAPI(psid, { text: i === 0 ? prefix + chunk : chunk });
+  }
+};
+
 module.exports = async (sender_psid, callSendAPI, messageText) => {
-  // ✅ Keep everything after /lyrics as-is
+  // Keep everything after /lyrics as-is
   const songQuery = messageText.replace(/^\/lyrics\s*/i, "").trim();
 
   if (!songQuery) {
@@ -27,22 +36,17 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     if (!lyrics) throw new Error("Lyrics not found");
 
-    // 2️⃣ Clean unwanted Genius description before actual lyrics
+    // 2️⃣ Remove Genius description paragraph before actual lyrics
     let cleanedLyrics = lyrics.replace(/Lyrics[\s\S]*?(?=\n?\[)/, "");
 
-    // Remove extra spacing
+    // Clean extra spacing
     cleanedLyrics = cleanedLyrics.replace(/\n{3,}/g, "\n\n").trim();
 
-    // 3️⃣ Messenger safe limit
-    const MAX = 1900;
-    if (cleanedLyrics.length > MAX) {
-      cleanedLyrics = cleanedLyrics.slice(0, MAX) + "\n\n(Truncated...)";
-    }
+    // 3️⃣ Prefix for the first chunk only
+    const firstChunkPrefix = `🎵 ${title} — ${artist}\n\n`;
 
-    // 4️⃣ Send formatted response
-    await callSendAPI(sender_psid, {
-      text: `🎵 ${title} — ${artist}\n\n${cleanedLyrics}\n\n🔗 ${url}`,
-    });
+    // 4️⃣ Send first chunk + remaining lyrics safely
+    await sendInChunks(sender_psid, cleanedLyrics + `\n\n🔗 ${url}`, callSendAPI, firstChunkPrefix);
 
   } catch (err) {
     console.error("Lyrics Error:", err.message);

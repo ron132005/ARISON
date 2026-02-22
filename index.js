@@ -160,7 +160,7 @@ async function handleMessage(psid, text, mid) {
       text: "Pick an option:",
       quick_replies: [
         { content_type: "text", title: "HELP", payload: "HELP_PAYLOAD" },
-        { content_type: "text", title: "OWNER", payload: "OWNER_PAYLOAD" },
+        { content_type: "text", title: "DEVELOPER", payload: "OWNER_PAYLOAD" },
         { content_type: "text", title: "MCU", payload: "MCU_PAYLOAD" },
         { content_type: "text", title: "SONG", payload: "SONG_PAYLOAD" },
         { content_type: "text", title: "LYRICS", payload: "LYRICS_PAYLOAD" },
@@ -227,6 +227,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 
 

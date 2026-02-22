@@ -10,7 +10,7 @@ const mistralCommand = require("./funcs/mistral.js");
 const songCommand = require("./funcs/song.js");
 const tiktokCommand = require("./funcs/tiktok.js");
 const lyricsCommand = require("./funcs/lyrics.js");
-const ownerCommand = require("./funcs/owner.js");
+const developerCommand = require("./funcs/owner.js");
 const mcuCommand = require("./funcs/mcu.js");
 
 const app = express().use(express.json());
@@ -132,8 +132,8 @@ function handlePayload(senderId, payload, messageMid) {
     case "HELP_PAYLOAD":
       return helpCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
 
-    case "OWNER_PAYLOAD":
-      return ownerCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
+    case "DEVELOPER_PAYLOAD":
+      return developerCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
 
     case "MCU_PAYLOAD":
       return mcuCommand(senderId, (psid, msg) => callSendAPI(psid, msg, messageMid));
@@ -170,7 +170,7 @@ async function handleMessage(psid, text, mid) {
 
   if (input === "/help") return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
   if (input === "/test") return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
-  if (input === "/owner") return ownerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (input === "/developer") return developerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
   if (input === "/mcu") return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
   if (input === "hi" || input === "hello") return callSendAPI(psid, { text: "Hello!" }, mid);
 
@@ -227,6 +227,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 
 

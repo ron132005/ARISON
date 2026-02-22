@@ -168,7 +168,9 @@ async function handleMessage(psid, text, mid) {
     }, mid);
   }
 
-  if (input === "/help") return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+  if (["help", "/help"].includes(input.toLowerCase())) {
+  return helpCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
+};
   if (input === "/test") return testCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
   if (input === "/developer") return developerCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
   if (input === "/mcu") return mcuCommand(psid, (id, msg) => callSendAPI(id, msg, mid));
@@ -227,6 +229,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 
 

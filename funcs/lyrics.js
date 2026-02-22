@@ -1,7 +1,8 @@
 const axios = require("axios");
 
 module.exports = async (sender_psid, callSendAPI, messageText) => {
-  const songQuery = messageText.split(" ").slice(1).join(" ").trim();
+  // ✅ Keep everything after /lyrics as-is
+  const songQuery = messageText.replace(/^\/lyrics\s*/i, "").trim();
 
   if (!songQuery) {
     return callSendAPI(sender_psid, {
@@ -10,7 +11,7 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
   }
 
   try {
-    // 1️⃣ Fetch from Popcat API
+    // 1️⃣ Fetch lyrics from Popcat API
     const res = await axios.get(
       `https://api.popcat.xyz/v2/lyrics?song=${encodeURIComponent(songQuery)}`,
       { timeout: 15000 }
@@ -24,21 +25,18 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
 
     const { title, artist, lyrics, url } = res.data.message;
 
-    if (!lyrics) {
-      throw new Error("Lyrics not found in response");
-    }
+    if (!lyrics) throw new Error("Lyrics not found");
 
-    // 2️⃣ Clean unwanted header junk (like Contributors/Translations text)
-    let cleanedLyrics = lyrics
-      .replace(/^[\s\S]*?Lyrics/, "Lyrics") // Remove metadata before actual lyrics
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+    // 2️⃣ Clean unwanted Genius description before actual lyrics
+    let cleanedLyrics = lyrics.replace(/Lyrics[\s\S]*?(?=\n?\[)/, "");
 
-    // 3️⃣ Messenger safe limit (MAX 2000, keeping safe buffer)
+    // Remove extra spacing
+    cleanedLyrics = cleanedLyrics.replace(/\n{3,}/g, "\n\n").trim();
+
+    // 3️⃣ Messenger safe limit
     const MAX = 1900;
     if (cleanedLyrics.length > MAX) {
-      cleanedLyrics =
-        cleanedLyrics.slice(0, MAX) + "\n\n(Truncated...)";
+      cleanedLyrics = cleanedLyrics.slice(0, MAX) + "\n\n(Truncated...)";
     }
 
     // 4️⃣ Send formatted response

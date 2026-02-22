@@ -1,81 +1,49 @@
 const axios = require("axios");
-const cheerio = require("cheerio");
-
-const GENIUS_TOKEN = "R9XTZG4bAf6hXETxx53Plo0TiXEpdl4EHNml4psOJ9lzgFukCAX_CKrpdNunoEiI";
 
 module.exports = async (sender_psid, callSendAPI, messageText) => {
-  const query = messageText.split(" ").slice(1).join(" ").trim();
+  const songQuery = messageText.split(" ").slice(1).join(" ").trim();
 
-  if (!query) {
+  if (!songQuery) {
     return callSendAPI(sender_psid, {
       text: "⚠️ Usage: /lyrics [song name]",
     });
   }
 
-  if (!GENIUS_TOKEN) {
-    return callSendAPI(sender_psid, {
-      text: "❌ Genius API token not configured.",
-    });
-  }
-
   try {
-    // 1️⃣ Search song using official Genius API
-    const searchRes = await axios.get(
-      "https://api.genius.com/search",
-      {
-        params: { q: query },
-        headers: {
-          Authorization: `Bearer ${GENIUS_TOKEN}`,
-        },
-        timeout: 15000,
-      }
+    // 1️⃣ Fetch from Popcat API
+    const res = await axios.get(
+      `https://api.popcat.xyz/v2/lyrics?song=${encodeURIComponent(songQuery)}`,
+      { timeout: 15000 }
     );
 
-    const hits = searchRes.data.response.hits;
-
-    if (!hits || hits.length === 0) {
+    if (!res.data || res.data.error || !res.data.message) {
       return callSendAPI(sender_psid, {
-        text: `ℹ️ No lyrics found for "${query}".`,
+        text: `ℹ️ No lyrics found for "${songQuery}".`,
       });
     }
 
-    const song = hits[0].result;
-    const songUrl = song.url;
-
-    // 2️⃣ Scrape lyrics page
-    const page = await axios.get(songUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      },
-      timeout: 15000,
-    });
-
-    const $ = cheerio.load(page.data);
-
-    let lyrics = "";
-
-    // Genius modern layout
-    $('div[data-lyrics-container="true"]').each((i, elem) => {
-      lyrics += $(elem).text() + "\n";
-    });
+    const { title, artist, lyrics, url } = res.data.message;
 
     if (!lyrics) {
-      throw new Error("Lyrics scraping failed");
+      throw new Error("Lyrics not found in response");
     }
 
-    // 3️⃣ Clean lyrics
-    lyrics = lyrics.replace(/\n{3,}/g, "\n\n").trim();
+    // 2️⃣ Clean unwanted header junk (like Contributors/Translations text)
+    let cleanedLyrics = lyrics
+      .replace(/^[\s\S]*?Lyrics/, "Lyrics") // Remove metadata before actual lyrics
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
 
-    // 4️⃣ Messenger safe limit (MAX 2000)
+    // 3️⃣ Messenger safe limit (MAX 2000, keeping safe buffer)
     const MAX = 1900;
-    if (lyrics.length > MAX) {
-      lyrics = lyrics.slice(0, MAX) + "\n\n(Truncated...)";
+    if (cleanedLyrics.length > MAX) {
+      cleanedLyrics =
+        cleanedLyrics.slice(0, MAX) + "\n\n(Truncated...)";
     }
 
-    // 5️⃣ Send
+    // 4️⃣ Send formatted response
     await callSendAPI(sender_psid, {
-      text: `🎵 ${song.full_title}\n\n${lyrics}`,
+      text: `🎵 ${title} — ${artist}\n\n${cleanedLyrics}\n\n🔗 ${url}`,
     });
 
   } catch (err) {

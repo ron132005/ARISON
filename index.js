@@ -42,8 +42,8 @@ async function setMessengerProfile() {
               { name: "/developer", description: "Information about the developer" },
               { name: "/song", description: "Find and send music" },
               { name: "/mcu", description: "See the next Marvel movie countdown" },
-              { name: "/menu", description: "Show the interactive quick menu" }
-              { name: "/lyrics", description: "Find and send song lyrics" },
+              { name: "/menu", description: "Show the interactive quick menu" }, 
+              { name: "/lyrics", description: "Find and send song lyrics" }
             ]
           }
         ],
@@ -227,6 +227,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 
 

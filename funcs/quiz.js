@@ -4,7 +4,6 @@ const he = require("he"); // Decodes HTML entities like &quot; to "
 module.exports = async function (psid, callSendAPI) {
   try {
     // 1️⃣ Fetch 1 General Knowledge question (Category 9)
-    // We use &category=9 to filter for General Knowledge
     const res = await axios.get(
       "https://opentdb.com/api.php?amount=1&category=9&type=multiple"
     );
@@ -25,16 +24,23 @@ module.exports = async function (psid, callSendAPI) {
       .sort(() => Math.random() - 0.5); // Shuffle
 
     // 3️⃣ Build quick replies
-    // Note: Payloads match the switch case in your main index.js
+    // Note: We now attach the correctAnswer to the WRONG payload using a colon ":"
     const quick_replies = options.map((opt) => ({
       content_type: "text",
-      title: opt.length > 20 ? opt.substring(0, 17) + "..." : opt, // FB limit is 20 chars for titles
-      payload: opt === correctAnswer ? "QUIZ_CORRECT" : "QUIZ_WRONG",
+      title: opt.length > 20 ? opt.substring(0, 17) + "..." : opt,
+      payload: opt === correctAnswer ? "QUIZ_CORRECT" : `QUIZ_WRONG:${correctAnswer}`,
     }));
 
     // 4️⃣ Send the question
+    // Added a simple "Exit" button so users aren't stuck in a quiz loop
+    quick_replies.push({
+      content_type: "text",
+      title: "Exit Quiz ❌",
+      payload: "HELP_PAYLOAD"
+    });
+
     await callSendAPI(psid, {
-      text: `[General Knowledge] 🧠\n\n${question}`,
+      text: `🧠 [General Knowledge]\n\n${question}`,
       quick_replies,
     });
 

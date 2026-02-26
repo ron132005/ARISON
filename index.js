@@ -144,7 +144,7 @@ function handlePayload(senderId, payload, messageMid) {
     case "GET_STARTED_PAYLOAD":
       return callSendAPI(
         senderId, 
-        { text: "Welcome! 👋 Click the button below to get started or type /menu to see what I can do." }, 
+        { text: "Welcome! I am A.R.I.S.O.N., in short for Autonomous, Responsive, Intelligent Systems for Optimized Networking. Type /menu to see what I can do." }, 
         messageMid
       );
 
@@ -265,6 +265,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Webhook live on ${PORT}`);
   setMessengerProfile();
 });
+
 
 
 

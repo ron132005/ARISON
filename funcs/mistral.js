@@ -1,7 +1,7 @@
 const { Mistral } = require("@mistralai/mistralai");
 
 const mistral = new Mistral({
-  apiKey: process.env.MISTRAL_API_KEY || "ChyRy431UGbOG5lrDjAoAhcTfqY9wPZC",
+  apiKey: process.env.MISTRAL_API_KEY,
 });
 
 // Map stored as a module-level constant — built once, never rebuilt
@@ -107,3 +107,4 @@ module.exports = async (sender_psid, callSendAPI, messageText) => {
     });
   }
 };
+
